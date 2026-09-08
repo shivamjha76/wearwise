@@ -6,3 +6,5 @@ concept: - AI-powered personalized fashion & wardrobe assistant.
 .venv\Scripts\activate (to activate the vitural enviroment)
 
 pip freeze > requirements.txt (update the requirements)
+
+run backend >> uvicorn app.main:app --reload

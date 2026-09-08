@@ -1,0 +1,14 @@
+INFO:     Will watch for changes in these directories: ['E:\\WearWise\\backend']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [11660] using StatReload
+INFO:     Started server process [18600]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'app\database.py'. Reloading...
+ INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [18600]
+INFO:     Started server process [12464]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
