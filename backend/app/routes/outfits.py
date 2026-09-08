@@ -8,7 +8,6 @@ from app.models.wardrobe import WardrobeItem
 from app.services.recommendation import generate_outfits
 from app.services.ai import explain_outfit
 
-
 router = APIRouter(
     prefix="/outfits",
     tags=["Outfits"]
@@ -16,22 +15,15 @@ router = APIRouter(
 
 
 @router.post("/{user_id}")
-def recommend_outfits(
+def get_outfits(
     user_id: int,
     occasion: str,
     db: Session = Depends(get_db)
 ):
-    user = (
-        db.query(User)
-        .filter(User.id == user_id)
-        .first()
-    )
+    user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found"
-        )
+        raise HTTPException(status_code=404, detail="User not found")
 
     profile = (
         db.query(StyleProfile)
@@ -70,14 +62,21 @@ def recommend_outfits(
         )
 
     best = outfits[0]
+    top = best["top"]
+    bottom = best["bottom"]
+    shoes = best["shoes"]
 
-    explanation = explain_outfit(
-        best["top"],
-        best["bottom"],
-        best["shoes"],
-        profile,
-        occasion
-    )
+    try:
+        explanation = explain_outfit(
+            top,
+            bottom,
+            shoes,
+            profile,
+            occasion
+        )
+    except Exception as exc:
+        print(repr(exc))
+        explanation = "AI explanation unavailable"
 
     return {
         "user_id": user_id,
