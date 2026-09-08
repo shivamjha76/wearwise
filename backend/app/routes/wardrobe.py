@@ -8,6 +8,7 @@ from app.schemas.wardrobe import (
     WardrobeItemCreate,
     WardrobeItemResponse
 )
+from app.services.wardrobe_gap import recommend_next_item
 
 
 router = APIRouter(
@@ -94,4 +95,40 @@ def delete_wardrobe_item(
 
     return {
         "message": "Wardrobe item deleted successfully"
+    }
+    
+@router.get("/{user_id}/next-purchase")
+def next_purchase(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    user = (
+        db.query(User)
+        .filter(User.id == user_id)
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    wardrobe = (
+        db.query(WardrobeItem)
+        .filter(WardrobeItem.user_id == user_id)
+        .all()
+    )
+
+    if not wardrobe:
+        raise HTTPException(
+            status_code=400,
+            detail="Wardrobe is empty"
+        )
+
+    recommendations = recommend_next_item(wardrobe)
+
+    return {
+        "user_id": user_id,
+        "recommendations": recommendations
     }

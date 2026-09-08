@@ -6,6 +6,7 @@ from app.models.user import User
 from app.models.style_profile import StyleProfile
 from app.models.wardrobe import WardrobeItem
 from app.services.recommendation import generate_outfits
+from app.services.ai import explain_outfit
 
 
 router = APIRouter(
@@ -68,6 +69,16 @@ def recommend_outfits(
             detail="Not enough wardrobe items to generate an outfit"
         )
 
+    best = outfits[0]
+
+    explanation = explain_outfit(
+        best["top"],
+        best["bottom"],
+        best["shoes"],
+        profile,
+        occasion
+    )
+
     return {
         "user_id": user_id,
         "occasion": occasion,
@@ -79,5 +90,6 @@ def recommend_outfits(
                 "score": outfit["score"]
             }
             for outfit in outfits
-        ]
+        ],
+        "explanation": explanation
     }
