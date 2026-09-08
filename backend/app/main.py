@@ -7,6 +7,7 @@ from app.routes.users import router as user_router
 from app.routes.style_profiles import router as style_profile_router
 from app.routes.wardrobe import router as wardrobe_router
 from app.routes.outfits import router as outfit_router
+from fastapi.middleware.cors import CORSMiddleware
 
 
 Base.metadata.create_all(bind=engine)
@@ -15,6 +16,17 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="WearWise API",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

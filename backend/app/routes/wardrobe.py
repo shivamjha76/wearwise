@@ -9,6 +9,7 @@ from app.schemas.wardrobe import (
     WardrobeItemResponse
 )
 from app.services.wardrobe_gap import recommend_next_item
+from app.services.products import get_products_for_color
 
 
 router = APIRouter(
@@ -98,15 +99,9 @@ def delete_wardrobe_item(
     }
     
 @router.get("/{user_id}/next-purchase")
-def next_purchase(
-    user_id: int,
-    db: Session = Depends(get_db)
-):
-    user = (
-        db.query(User)
-        .filter(User.id == user_id)
-        .first()
-    )
+def next_purchase(user_id: int, db: Session = Depends(get_db)):
+
+    user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
         raise HTTPException(
@@ -120,13 +115,21 @@ def next_purchase(
         .all()
     )
 
-    if not wardrobe:
-        raise HTTPException(
-            status_code=400,
-            detail="Wardrobe is empty"
+    recommendations = recommend_next_item(wardrobe)
+
+    if not recommendations:
+        return {
+            "user_id": user_id,
+            "recommendations": []
+        }
+
+    for recommendation in recommendations:
+
+        products = get_products_for_color(
+            recommendation["color"]
         )
 
-    recommendations = recommend_next_item(wardrobe)
+        recommendation["products"] = products
 
     return {
         "user_id": user_id,
