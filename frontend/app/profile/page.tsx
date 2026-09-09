@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL, getImageUrl } from "@/lib/api";
-import { getStoredUser, getAuthHeaders, setSession, getStoredToken, User } from "@/lib/auth";
+import { getStoredUser, getAuthHeaders, setSession, getStoredToken, clearSession, User } from "@/lib/auth";
 
 const SKIN_TONES = [
   { value: "fair", label: "Fair", hex: "#fae2d6" },
@@ -30,7 +30,7 @@ export default function ProfilePage() {
     email: "",
     height: "",
     weight: "",
-    skin_tone: "medium",
+    skin_tone: "",
     style_preference: "casual",
     fit_preference: "regular",
     budget: "",
@@ -160,7 +160,15 @@ export default function ProfilePage() {
       if (token) {
         setSession(token, updatedUser);
       }
-      setToastMessage("Profile picture updated! ✨");
+
+      if (updatedUser.skin_tone) {
+        setForm((prev) => ({ ...prev, skin_tone: updatedUser.skin_tone || "" }));
+        const toneLabel = updatedUser.skin_tone.charAt(0).toUpperCase() + updatedUser.skin_tone.slice(1);
+        setToastMessage(`Photo updated! ✨ AI calibrated skin tone: ${toneLabel}`);
+      } else {
+        setForm((prev) => ({ ...prev, skin_tone: "" }));
+        setToastMessage("Photo updated. No human face detected — skin tone unset.");
+      }
     } catch (err: unknown) {
       console.error(err);
       const msg = err instanceof Error ? err.message : "Failed to upload photo";
@@ -192,10 +200,11 @@ export default function ProfilePage() {
       const updatedUser: User = await res.json();
       setCurrentUser(updatedUser);
       setAvatarUrl(null);
+      setForm((prev) => ({ ...prev, skin_tone: "" }));
       if (token) {
         setSession(token, updatedUser);
       }
-      setToastMessage("Profile picture removed.");
+      setToastMessage("Profile picture removed. Skin tone reset.");
     } catch (err: unknown) {
       console.error(err);
       setToastMessage("Could not remove profile picture.");
@@ -228,7 +237,7 @@ export default function ProfilePage() {
         body: JSON.stringify({
           height: Number(form.height),
           weight: Number(form.weight),
-          skin_tone: form.skin_tone,
+          skin_tone: form.skin_tone || null,
           style_preference: form.style_preference,
           fit_preference: form.fit_preference,
           budget: Number(form.budget),
@@ -247,6 +256,10 @@ export default function ProfilePage() {
       setLoading(false);
     }
   };
+
+  const currentToneObj = SKIN_TONES.find(
+    (tone) => tone.value.toLowerCase() === (form.skin_tone || "").toLowerCase()
+  );
 
   if (fetchingProfile) {
     return (
@@ -370,6 +383,19 @@ export default function ProfilePage() {
                 <p className="text-xs text-gray-500 mt-0.5">
                   Upload a portrait picture (JPG, PNG or WebP, up to 5MB).
                 </p>
+
+                <div className="mt-2 flex items-center gap-2">
+                  {currentToneObj ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800 border border-emerald-200">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: currentToneObj.hex }} />
+                      <span>AI Skin Tone: {currentToneObj.label}</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800 border border-amber-200">
+                      <span>⚠️ Skin Tone: Undefined (No face detected)</span>
+                    </span>
+                  )}
+                </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2.5">
                   <input
@@ -512,48 +538,64 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Section 3: Skin Tone Calibration */}
+          {/* Section 3: AI Skin Tone Calibration (Read-Only AI Calibrated) */}
           <div>
             <div className="flex items-center justify-between border-b border-[#eceef0] pb-2.5">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-900">
-                3. Skin Tone & Color Calibration
-              </h2>
-              <span className="text-xs font-bold capitalize text-amber-900">
-                Selected: {form.skin_tone}
-              </span>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-900">
+                  3. Skin Tone Calibration
+                </h2>
+                <span className="inline-flex items-center gap-1 rounded-md bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-neutral-600 border border-neutral-200 select-none">
+                  🔒 AI Auto-Calibrated
+                </span>
+              </div>
+              {currentToneObj && (
+                <span className="text-xs font-bold text-emerald-800">
+                  Detected: {currentToneObj.label}
+                </span>
+              )}
             </div>
 
             <p className="mt-2 text-xs text-gray-500">
-              Assists the AI Color Harmony Engine in matching tonal contrast to your natural complexion.
+              Skin tone is analyzed and calibrated automatically by AI from your portrait photo. Manual editing is disabled.
             </p>
 
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {SKIN_TONES.map((tone) => {
-                const isSelected = form.skin_tone === tone.value;
-                return (
-                  <button
-                    key={tone.value}
-                    type="button"
-                    onClick={() => setForm({ ...form, skin_tone: tone.value })}
-                    className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition-all cursor-pointer ${
-                      isSelected
-                        ? "border-black bg-[#171717] text-white shadow-xs ring-1 ring-black/10"
-                        : "border-gray-200 bg-[#fbfbf9] text-gray-900 hover:border-gray-400 hover:bg-white"
-                    }`}
-                  >
+            <div className="mt-4">
+              {currentToneObj ? (
+                <div className="flex items-center justify-between p-4 rounded-2xl border border-neutral-200 bg-gradient-to-r from-[#fafaf8] via-white to-[#fafaf8] shadow-2xs">
+                  <div className="flex items-center gap-3.5">
                     <span
-                      className="h-6 w-6 rounded-full border border-black/10 shadow-2xs shrink-0"
-                      style={{ backgroundColor: tone.hex }}
+                      className="h-10 w-10 rounded-full border-2 border-white shadow-md shrink-0 ring-2 ring-black/5"
+                      style={{ backgroundColor: currentToneObj.hex }}
                     />
                     <div>
-                      <p className="text-xs font-bold">{tone.label}</p>
-                      <p className={`text-[10px] ${isSelected ? "text-gray-300" : "text-gray-400"}`}>
-                        Undertone
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold text-gray-950">
+                          {currentToneObj.label} Complexion
+                        </p>
+                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
+                          Active
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Calibrated from your portrait photo. Upload a new photo above to recalibrate automatically.
                       </p>
                     </div>
-                  </button>
-                );
-              })}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3.5 p-4 rounded-2xl border border-dashed border-amber-300 bg-amber-50/60 text-amber-900">
+                  <span className="text-2xl select-none">⚠️</span>
+                  <div>
+                    <p className="text-xs font-bold text-amber-950">
+                      Skin Tone: Not Detected / Undefined
+                    </p>
+                    <p className="text-[11px] text-amber-800 mt-0.5">
+                      Upload a portrait photo above with your face clearly visible to automatically detect your skin tone.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

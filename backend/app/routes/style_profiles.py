@@ -70,7 +70,8 @@ def create_or_update_style_profile(
     if profile:
         profile.height = profile_data.height
         profile.weight = profile_data.weight
-        profile.skin_tone = profile_data.skin_tone
+        if profile_data.skin_tone is not None:
+            profile.skin_tone = profile_data.skin_tone
         profile.style_preference = profile_data.style_preference
         profile.fit_preference = profile_data.fit_preference
         profile.budget = profile_data.budget

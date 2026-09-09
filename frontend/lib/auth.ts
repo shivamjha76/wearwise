@@ -5,6 +5,7 @@ export interface User {
   name: string;
   email: string;
   avatar_url?: string | null;
+  skin_tone?: string | null;
 }
 
 export interface AuthResponse {

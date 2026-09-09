@@ -11,6 +11,7 @@ class UserResponse(BaseModel):
     name: str
     email: str
     avatar_url: str | None = None
+    skin_tone: str | None = None
 
     class Config:
         from_attributes = True
