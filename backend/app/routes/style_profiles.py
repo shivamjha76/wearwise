@@ -80,6 +80,12 @@ def create_or_update_style_profile(
             profile.fit_preference = profile_data.fit_preference
         if profile_data.budget is not None:
             profile.budget = profile_data.budget
+        profile.chest_bust = profile_data.chest_bust
+        profile.waist_size = profile_data.waist_size
+        profile.hip_size = profile_data.hip_size
+        profile.top_size = profile_data.top_size
+        profile.bottom_size = profile_data.bottom_size
+        profile.shoe_size = profile_data.shoe_size
     else:
         profile = StyleProfile(
             user_id=user_id,
@@ -89,7 +95,13 @@ def create_or_update_style_profile(
             skin_tone=profile_data.skin_tone,
             style_preference=profile_data.style_preference or "casual",
             fit_preference=profile_data.fit_preference or "regular",
-            budget=profile_data.budget
+            budget=profile_data.budget,
+            chest_bust=profile_data.chest_bust,
+            waist_size=profile_data.waist_size,
+            hip_size=profile_data.hip_size,
+            top_size=profile_data.top_size,
+            bottom_size=profile_data.bottom_size,
+            shoe_size=profile_data.shoe_size,
         )
         db.add(profile)
 

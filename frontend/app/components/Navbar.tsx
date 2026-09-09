@@ -105,22 +105,15 @@ export default function Navbar() {
                 Shop
               </Link>
 
-              <Link
-                href="/profile"
-                className={`hidden rounded-lg px-3 py-2 transition sm:block ${
-                  pathname === "/profile"
-                    ? "bg-gray-100 text-black font-semibold"
-                    : "text-gray-600 hover:bg-gray-100 hover:text-black"
-                }`}
-              >
-                Profile
-              </Link>
-
-              <div className="ml-2 flex items-center gap-2.5 border-l border-gray-200 pl-3">
+              <div className="ml-2 flex items-center border-l border-gray-200 pl-3">
                 <Link
                   href="/profile"
-                  className="flex items-center gap-2 group transition"
-                  title="Your Profile"
+                  className={`flex items-center gap-2 py-1 px-2 rounded-xl transition ${
+                    pathname === "/profile"
+                      ? "bg-gray-200/80 ring-1 ring-black/10"
+                      : "hover:bg-gray-100"
+                  }`}
+                  title="Your Profile & Settings"
                 >
                   <div className="h-7 w-7 overflow-hidden rounded-full border border-gray-300 bg-neutral-800 text-white flex items-center justify-center text-xs font-bold uppercase select-none shadow-2xs">
                     {user.avatar_url ? (
@@ -133,17 +126,10 @@ export default function Navbar() {
                       <span>{user.name ? user.name.charAt(0) : "👤"}</span>
                     )}
                   </div>
-                  <span className="hidden text-xs font-semibold text-gray-700 group-hover:text-black md:inline-block">
+                  <span className="hidden text-xs font-semibold text-gray-800 md:inline-block">
                     {user.name}
                   </span>
                 </Link>
-
-                <button
-                  onClick={handleLogout}
-                  className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 hover:text-black"
-                >
-                  Log out
-                </button>
               </div>
             </>
           ) : (

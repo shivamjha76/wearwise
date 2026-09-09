@@ -24,4 +24,12 @@ class StyleProfile(Base):
     fit_preference = Column(String(50))
     budget = Column(Float)
 
+    # Size Chart & Measurements
+    chest_bust = Column(String(50), nullable=True)
+    waist_size = Column(String(50), nullable=True)
+    hip_size = Column(String(50), nullable=True)
+    top_size = Column(String(30), nullable=True)
+    bottom_size = Column(String(30), nullable=True)
+    shoe_size = Column(String(30), nullable=True)
+
     user = relationship("User", backref="style_profile")

@@ -9,6 +9,12 @@ class StyleProfileCreate(BaseModel):
     style_preference: str | None = "casual"
     fit_preference: str | None = "regular"
     budget: float | None = None
+    chest_bust: str | None = None
+    waist_size: str | None = None
+    hip_size: str | None = None
+    top_size: str | None = None
+    bottom_size: str | None = None
+    shoe_size: str | None = None
 
 
 class StyleProfileResponse(BaseModel):
@@ -21,6 +27,12 @@ class StyleProfileResponse(BaseModel):
     style_preference: str | None = None
     fit_preference: str | None = None
     budget: float | None = None
+    chest_bust: str | None = None
+    waist_size: str | None = None
+    hip_size: str | None = None
+    top_size: str | None = None
+    bottom_size: str | None = None
+    shoe_size: str | None = None
 
     class Config:
         from_attributes = True

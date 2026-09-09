@@ -7,6 +7,7 @@ export interface User {
   avatar_url?: string | null;
   skin_tone?: string | null;
   gender?: string | null;
+  phone?: string | null;
 }
 
 export interface AuthResponse {

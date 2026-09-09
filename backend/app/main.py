@@ -29,10 +29,24 @@ def init_db():
                 cols = [c["name"] for c in inspector.get_columns("users")]
                 if "avatar_url" not in cols:
                     conn.execute(text("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500)"))
+                if "phone" not in cols:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN phone VARCHAR(20)"))
             if "style_profiles" in inspector.get_table_names():
                 sp_cols = [c["name"] for c in inspector.get_columns("style_profiles")]
                 if "gender" not in sp_cols:
                     conn.execute(text("ALTER TABLE style_profiles ADD COLUMN gender VARCHAR(50)"))
+                if "chest_bust" not in sp_cols:
+                    conn.execute(text("ALTER TABLE style_profiles ADD COLUMN chest_bust VARCHAR(50)"))
+                if "waist_size" not in sp_cols:
+                    conn.execute(text("ALTER TABLE style_profiles ADD COLUMN waist_size VARCHAR(50)"))
+                if "hip_size" not in sp_cols:
+                    conn.execute(text("ALTER TABLE style_profiles ADD COLUMN hip_size VARCHAR(50)"))
+                if "top_size" not in sp_cols:
+                    conn.execute(text("ALTER TABLE style_profiles ADD COLUMN top_size VARCHAR(30)"))
+                if "bottom_size" not in sp_cols:
+                    conn.execute(text("ALTER TABLE style_profiles ADD COLUMN bottom_size VARCHAR(30)"))
+                if "shoe_size" not in sp_cols:
+                    conn.execute(text("ALTER TABLE style_profiles ADD COLUMN shoe_size VARCHAR(30)"))
     except Exception as e:
         print(f"Warning: Database metadata initialization error: {e}")
 

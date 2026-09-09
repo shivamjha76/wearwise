@@ -19,18 +19,38 @@ const GENDER_OPTIONS = [
   { value: "unisex", label: "Non-Binary / Unisex", icon: "✨", desc: "Fluid & gender-neutral style" },
 ] as const;
 
+const TOP_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL"] as const;
+const BOTTOM_SIZES = ["28", "30", "32", "34", "36", "38", "40", "42"] as const;
+const SHOE_SIZES = ["UK 6", "UK 7", "UK 8", "UK 9", "UK 10", "UK 11", "UK 12"] as const;
+
+// Preset quick measurements in inches
+const MALE_CHEST_PRESETS = ["36", "38", "40", "42", "44", "46"];
+const MALE_WAIST_PRESETS = ["28", "30", "32", "34", "36", "38", "40"];
+const MALE_HIP_PRESETS = ["36", "38", "40", "42", "44", "46"];
+
+const FEMALE_BUST_PRESETS = ["30", "32", "34", "36", "38", "40", "42", "44"];
+const FEMALE_WAIST_PRESETS = ["26", "28", "30", "32", "34", "36", "38", "40"];
+const FEMALE_HIP_PRESETS = ["32", "34", "36", "38", "40", "42", "44", "46"];
+
 export default function ProfilePage() {
   const router = useRouter();
 
   const [form, setForm] = useState({
     name: "",
     email: "",
+    phone: "",
     gender: "male",
     height: "",
     weight: "",
     skin_tone: "",
     style_preference: "casual",
     fit_preference: "regular",
+    chest_bust: "",
+    waist_size: "",
+    hip_size: "",
+    top_size: "M",
+    bottom_size: "32",
+    shoe_size: "UK 8",
   });
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -41,6 +61,9 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(false);
   const [fetchingProfile, setFetchingProfile] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -79,6 +102,7 @@ export default function ProfilePage() {
             ...prev,
             name: freshUser.name || prev.name,
             email: freshUser.email || prev.email,
+            phone: freshUser.phone || prev.phone,
           }));
           if (token) {
             setSession(token, freshUser);
@@ -89,7 +113,7 @@ export default function ProfilePage() {
           return;
         }
 
-        // 2. Fetch style profile
+        // 2. Fetch style profile & sizing
         const res = await fetch(`${API_BASE_URL}/users/${user.id}/style-profile`, {
           headers: getAuthHeaders(),
         });
@@ -103,6 +127,12 @@ export default function ProfilePage() {
             skin_tone: data.skin_tone || prev.skin_tone,
             style_preference: data.style_preference || prev.style_preference,
             fit_preference: data.fit_preference || prev.fit_preference,
+            chest_bust: data.chest_bust || "",
+            waist_size: data.waist_size || "",
+            hip_size: data.hip_size || "",
+            top_size: data.top_size || prev.top_size,
+            bottom_size: data.bottom_size || prev.bottom_size,
+            shoe_size: data.shoe_size || prev.shoe_size,
           }));
         }
       } catch (err) {
@@ -228,6 +258,24 @@ export default function ProfilePage() {
     }
 
     try {
+      // 1. Update User info (name, mobile number)
+      const userRes = await fetch(`${API_BASE_URL}/users/me`, {
+        method: "PUT",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          name: form.name,
+          phone: form.phone || null,
+        }),
+      });
+
+      if (userRes.ok) {
+        const freshUser: User = await userRes.json();
+        setCurrentUser(freshUser);
+        const token = getStoredToken();
+        if (token) setSession(token, freshUser);
+      }
+
+      // 2. Update Style Profile with measurements & sizes
       const profileResponse = await fetch(`${API_BASE_URL}/users/${user.id}/style-profile`, {
         method: "POST",
         headers: getAuthHeaders(),
@@ -238,6 +286,12 @@ export default function ProfilePage() {
           skin_tone: form.skin_tone || null,
           style_preference: form.style_preference || "casual",
           fit_preference: form.fit_preference || "regular",
+          chest_bust: form.chest_bust || null,
+          waist_size: form.waist_size || null,
+          hip_size: form.hip_size || null,
+          top_size: form.top_size || null,
+          bottom_size: form.bottom_size || null,
+          shoe_size: form.shoe_size || null,
         }),
       });
 
@@ -245,18 +299,53 @@ export default function ProfilePage() {
         throw new Error("Failed to save style profile");
       }
 
-      router.push("/wardrobe");
+      setToastMessage("Profile & measurements updated successfully! ✨");
+      setTimeout(() => {
+        router.push("/wardrobe");
+      }, 700);
     } catch (error) {
       console.error(error);
-      setToastMessage("Something went wrong saving your style profile.");
+      setToastMessage("Something went wrong saving your profile.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    clearSession();
+    router.push("/login");
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeletingAccount(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/me`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to delete account");
+      }
+
+      clearSession();
+      router.push("/");
+    } catch (err: unknown) {
+      console.error(err);
+      setToastMessage("Failed to delete account. Please try again.");
+      setDeletingAccount(false);
+      setShowDeleteModal(false);
     }
   };
 
   const currentToneObj = SKIN_TONES.find(
     (tone) => tone.value.toLowerCase() === (form.skin_tone || "").toLowerCase()
   );
+
+  const isFemale = form.gender === "female";
+  const chestBustPresets = isFemale ? FEMALE_BUST_PRESETS : MALE_CHEST_PRESETS;
+  const waistPresets = isFemale ? FEMALE_WAIST_PRESETS : MALE_WAIST_PRESETS;
+  const hipPresets = isFemale ? FEMALE_HIP_PRESETS : MALE_HIP_PRESETS;
 
   if (fetchingProfile) {
     return (
@@ -423,7 +512,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="mt-5 grid gap-4 sm:grid-cols-3">
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700">
                   Full Name
@@ -454,8 +543,27 @@ export default function ProfilePage() {
                     name="email"
                     type="email"
                     value={form.email}
+                    readOnly
+                    className="w-full rounded-xl border border-[#e2e4e7] bg-gray-100/70 py-3 pl-10 pr-3.5 text-xs sm:text-sm text-gray-600 cursor-not-allowed outline-none"
+                    title="Email is fixed for account security"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700">
+                  Mobile Number
+                </label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+                    📱
+                  </span>
+                  <input
+                    name="phone"
+                    type="tel"
+                    placeholder="+91 98765 43210"
+                    value={form.phone}
                     onChange={handleChange}
-                    required
                     className="w-full rounded-xl border border-[#e2e4e7] bg-[#fbfbf9] py-3 pl-10 pr-3.5 text-xs sm:text-sm text-gray-900 outline-none transition focus:border-black focus:bg-white focus:ring-1 focus:ring-black"
                   />
                 </div>
@@ -557,6 +665,259 @@ export default function ProfilePage() {
             </div>
           </div>
 
+          {/* Section 4: Size Chart & Precision Measurements */}
+          <div>
+            <div className="flex items-center justify-between border-b border-[#eceef0] pb-2.5">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-900">
+                  4. Size Chart & Fit Measurements
+                </h2>
+                <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-neutral-600 border border-neutral-200">
+                  📐 Smart Sizing
+                </span>
+              </div>
+              <span className="text-xs text-gray-500 hidden sm:inline">
+                {isFemale ? "Women's Fit Calibrated" : "Men's Fit Calibrated"}
+              </span>
+            </div>
+
+            <p className="mt-2 text-xs text-gray-500">
+              {isFemale
+                ? "Calibrated for women's proportions (Bust, Waist & Hip). Pick quick sizes or type your exact numbers."
+                : "Calibrated for men's proportions (Chest, Waist & Hip). Pick quick sizes or type your exact numbers."}
+            </p>
+
+            {/* Custom Body Measurements Grid */}
+            <div className="mt-4 grid gap-5 sm:grid-cols-3">
+              
+              {/* Chest / Bust */}
+              <div className="rounded-2xl border border-gray-200 bg-[#fafaf8] p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-gray-900">
+                    {isFemale ? "Bust / Breast Size" : "Chest Size"}
+                  </label>
+                  <span className="text-[11px] font-semibold text-gray-500">
+                    {form.chest_bust ? `${form.chest_bust}"` : "Not set"}
+                  </span>
+                </div>
+                
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {chestBustPresets.map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => setForm({ ...form, chest_bust: size })}
+                      className={`h-7 px-2 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                        form.chest_bust === size
+                          ? "bg-black text-white"
+                          : "bg-white border border-gray-200 text-gray-700 hover:border-gray-400"
+                      }`}
+                    >
+                      {size}&quot;
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative">
+                  <input
+                    name="chest_bust"
+                    placeholder="Custom (e.g. 38)"
+                    value={form.chest_bust}
+                    onChange={handleChange}
+                    className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-3 pr-8 text-xs text-gray-900 outline-none focus:border-black"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-bold">
+                    in
+                  </span>
+                </div>
+              </div>
+
+              {/* Waist (Kamar) */}
+              <div className="rounded-2xl border border-gray-200 bg-[#fafaf8] p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-gray-900">
+                    Waist Size (Kamar)
+                  </label>
+                  <span className="text-[11px] font-semibold text-gray-500">
+                    {form.waist_size ? `${form.waist_size}"` : "Not set"}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {waistPresets.map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => setForm({ ...form, waist_size: size })}
+                      className={`h-7 px-2 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                        form.waist_size === size
+                          ? "bg-black text-white"
+                          : "bg-white border border-gray-200 text-gray-700 hover:border-gray-400"
+                      }`}
+                    >
+                      {size}&quot;
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative">
+                  <input
+                    name="waist_size"
+                    placeholder="Custom (e.g. 32)"
+                    value={form.waist_size}
+                    onChange={handleChange}
+                    className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-3 pr-8 text-xs text-gray-900 outline-none focus:border-black"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-bold">
+                    in
+                  </span>
+                </div>
+              </div>
+
+              {/* Hip Size */}
+              <div className="rounded-2xl border border-gray-200 bg-[#fafaf8] p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-gray-900">
+                    Hip Size
+                  </label>
+                  <span className="text-[11px] font-semibold text-gray-500">
+                    {form.hip_size ? `${form.hip_size}"` : "Not set"}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {hipPresets.map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => setForm({ ...form, hip_size: size })}
+                      className={`h-7 px-2 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                        form.hip_size === size
+                          ? "bg-black text-white"
+                          : "bg-white border border-gray-200 text-gray-700 hover:border-gray-400"
+                      }`}
+                    >
+                      {size}&quot;
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative">
+                  <input
+                    name="hip_size"
+                    placeholder="Custom (e.g. 40)"
+                    value={form.hip_size}
+                    onChange={handleChange}
+                    className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-3 pr-8 text-xs text-gray-900 outline-none focus:border-black"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-bold">
+                    in
+                  </span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Standard Garment Sizes (Top, Bottom, Shoe) */}
+            <div className="mt-6 space-y-4 pt-4 border-t border-gray-100">
+              
+              {/* Top Size */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-700">
+                    Top Size (Upperwear / Shirts & Tees)
+                  </label>
+                  <span className="text-xs font-bold text-black bg-gray-100 px-2.5 py-0.5 rounded-full">
+                    {form.top_size}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {TOP_SIZES.map((size) => {
+                    const isSelected = form.top_size === size;
+                    return (
+                      <button
+                        key={size}
+                        type="button"
+                        onClick={() => setForm({ ...form, top_size: size })}
+                        className={`h-9 min-w-11 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
+                          isSelected
+                            ? "bg-[#171717] text-white shadow-xs"
+                            : "bg-[#fbfbf9] border border-gray-200 text-gray-800 hover:bg-white hover:border-gray-400"
+                        }`}
+                      >
+                        {size}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Bottom / Kamar Size */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-700">
+                    Bottom Size (Kamar / Pants & Jeans)
+                  </label>
+                  <span className="text-xs font-bold text-black bg-gray-100 px-2.5 py-0.5 rounded-full">
+                    Size {form.bottom_size}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {BOTTOM_SIZES.map((size) => {
+                    const isSelected = form.bottom_size === size;
+                    return (
+                      <button
+                        key={size}
+                        type="button"
+                        onClick={() => setForm({ ...form, bottom_size: size })}
+                        className={`h-9 min-w-11 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
+                          isSelected
+                            ? "bg-[#171717] text-white shadow-xs"
+                            : "bg-[#fbfbf9] border border-gray-200 text-gray-800 hover:bg-white hover:border-gray-400"
+                        }`}
+                      >
+                        {size}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Shoe Number */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-700">
+                    Shoe Size (Footwear)
+                  </label>
+                  <span className="text-xs font-bold text-black bg-gray-100 px-2.5 py-0.5 rounded-full">
+                    {form.shoe_size}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {SHOE_SIZES.map((size) => {
+                    const isSelected = form.shoe_size === size;
+                    return (
+                      <button
+                        key={size}
+                        type="button"
+                        onClick={() => setForm({ ...form, shoe_size: size })}
+                        className={`h-9 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
+                          isSelected
+                            ? "bg-[#171717] text-white shadow-xs"
+                            : "bg-[#fbfbf9] border border-gray-200 text-gray-800 hover:bg-white hover:border-gray-400"
+                        }`}
+                      >
+                        {size}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
           {/* Submit Action */}
           <div className="border-t border-[#eceef0] pt-6">
             <button
@@ -567,7 +928,7 @@ export default function ProfilePage() {
               {loading ? (
                 <>
                   <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  <span>Saving Profile...</span>
+                  <span>Saving Profile & Sizing...</span>
                 </>
               ) : (
                 <>
@@ -580,7 +941,102 @@ export default function ProfilePage() {
 
         </form>
 
+        {/* ================= 5. ACCOUNT MANAGEMENT & DANGER ZONE ================= */}
+        <div className="rounded-3xl border border-[#e2e4e7] bg-white p-6 sm:p-8 shadow-[0_10px_30px_rgba(27,35,43,0.03)] space-y-6">
+          <div className="flex items-center justify-between border-b border-[#eceef0] pb-3">
+            <div>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-900">
+                Account Management
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Session controls and permanent account deletion.
+              </p>
+            </div>
+            <span className="text-xs font-semibold text-gray-400">
+              {form.email}
+            </span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+            
+            {/* Logout Action */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-xs font-bold text-gray-800 shadow-2xs hover:bg-gray-50 hover:border-gray-400 transition active:scale-95 cursor-pointer"
+              >
+                <span>🚪</span>
+                <span>Log Out of WearWise</span>
+              </button>
+              <span className="text-[11px] text-gray-500 hidden md:inline">
+                Safely sign out on this browser.
+              </span>
+            </div>
+
+            {/* Delete Account Action */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(true)}
+                className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50/70 px-4 py-2.5 text-xs font-bold text-red-600 hover:bg-red-100/80 transition active:scale-95 cursor-pointer"
+              >
+                <span>🗑️</span>
+                <span>Delete Account</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+
       </div>
+
+      {/* ================= DELETE CONFIRMATION MODAL ================= */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-pop-in">
+          <div className="max-w-md w-full rounded-3xl border border-gray-200 bg-white p-6 sm:p-7 shadow-2xl">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-100 text-red-600 text-xl mx-auto">
+              ⚠️
+            </div>
+
+            <h3 className="mt-4 text-center text-lg font-bold text-gray-900">
+              Permanently Delete Account?
+            </h3>
+
+            <p className="mt-2 text-center text-xs sm:text-sm text-gray-600 leading-relaxed">
+              Are you sure you want to delete your account? This action <strong className="text-gray-900">cannot be undone</strong>. All your style calibrations, wardrobe items, photos, and saved outfits will be permanently removed.
+            </p>
+
+            <div className="mt-6 flex flex-col sm:flex-row items-center gap-3">
+              <button
+                type="button"
+                disabled={deletingAccount}
+                onClick={() => setShowDeleteModal(false)}
+                className="w-full sm:w-1/2 rounded-xl border border-gray-300 bg-white py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-50 transition cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={deletingAccount}
+                onClick={handleDeleteAccount}
+                className="w-full sm:w-1/2 rounded-xl bg-red-600 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-red-700 transition active:scale-95 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {deletingAccount ? (
+                  <>
+                    <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <span>Yes, Delete Account</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }
