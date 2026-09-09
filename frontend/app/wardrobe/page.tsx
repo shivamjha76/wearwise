@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL, getImageUrl } from "@/lib/api";
@@ -63,6 +63,66 @@ function getColorHex(colorName: string): string {
   return found ? found.hex : "#9ca3af";
 }
 
+// 4 to 5 words animated taglines with typewriter effect
+const WARDROBE_TAGLINES = [
+  "Your closet, curated effortlessly.",
+  "Smart styling for your closet.",
+  "Organize clothes, unlock better looks.",
+  "Everyday fashion, effortlessly organized.",
+];
+
+function AnimatedWardrobeTagline() {
+  const [index, setIndex] = useState(0);
+  const [subIndex, setSubIndex] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+
+  useEffect(() => {
+    if (isPaused) {
+      const pauseTimer = setTimeout(() => {
+        setIsPaused(false);
+        setIsDeleting(true);
+      }, 2200);
+      return () => clearTimeout(pauseTimer);
+    }
+
+    if (isDeleting) {
+      if (subIndex === 0) {
+        setIsDeleting(false);
+        setIndex((prev) => (prev + 1) % WARDROBE_TAGLINES.length);
+        return;
+      }
+      const deleteTimer = setTimeout(() => {
+        setSubIndex((prev) => prev - 1);
+      }, 35);
+      return () => clearTimeout(deleteTimer);
+    }
+
+    if (subIndex === WARDROBE_TAGLINES[index].length) {
+      setIsPaused(true);
+      return;
+    }
+
+    const typeTimer = setTimeout(() => {
+      setSubIndex((prev) => prev + 1);
+    }, 75);
+
+    return () => clearTimeout(typeTimer);
+  }, [subIndex, index, isDeleting, isPaused]);
+
+  return (
+    <div className="mt-2.5 flex items-center min-h-[28px]">
+      <p className="text-sm sm:text-base font-medium text-gray-500 tracking-tight flex items-center gap-1.5">
+        <span className="text-neutral-400 text-xs sm:text-sm">✨</span>
+        <span className="text-neutral-900 font-semibold tracking-tight">
+          {WARDROBE_TAGLINES[index].substring(0, subIndex)}
+        </span>
+        <span className="inline-block w-[2px] h-4 sm:h-[18px] bg-black align-middle animate-pulse" />
+      </p>
+    </div>
+  );
+}
+
 export default function WardrobePage() {
   const router = useRouter();
 
@@ -100,6 +160,8 @@ export default function WardrobePage() {
   const [dragActive, setDragActive] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   // Auto-dismiss toast notifications
   useEffect(() => {
@@ -242,8 +304,19 @@ export default function WardrobePage() {
 
     try {
       let finalImageUrl: string | null = null;
+      let finalCategory = form.category || "tshirt";
+      let finalColor = form.color || "black";
+      let finalFit = form.fit || "regular";
+      let finalPattern = form.pattern || "solid";
+      let finalStyle = form.style || "casual";
 
-      if (imageMode === "upload" && file) {
+      if (imageMode === "upload") {
+        if (!file) {
+          setNotification({ type: "error", message: "Please click a photo or choose an image file first." });
+          setUploading(false);
+          return;
+        }
+
         const formData = new FormData();
         formData.append("file", file);
 
@@ -266,19 +339,49 @@ export default function WardrobePage() {
 
         const uploadData = await uploadRes.json();
         finalImageUrl = uploadData.image_url;
-      } else if (imageMode === "url" && form.image_url.trim()) {
-        finalImageUrl = form.image_url.trim();
+
+        if (uploadData.tags) {
+          if (uploadData.tags.category) finalCategory = uploadData.tags.category;
+          if (uploadData.tags.color) finalColor = uploadData.tags.color;
+          if (uploadData.tags.fit) finalFit = uploadData.tags.fit;
+          if (uploadData.tags.pattern) finalPattern = uploadData.tags.pattern;
+          if (uploadData.tags.style) finalStyle = uploadData.tags.style;
+        }
+      } else if (imageMode === "url") {
+        const trimmedUrl = form.image_url.trim();
+        if (!trimmedUrl) {
+          setNotification({ type: "error", message: "Please enter a valid image URL." });
+          setUploading(false);
+          return;
+        }
+        finalImageUrl = trimmedUrl;
+
+        // Intelligent deduction from URL string
+        const urlLower = trimmedUrl.toLowerCase();
+        if (urlLower.includes("shirt") && !urlLower.includes("t-shirt") && !urlLower.includes("tshirt")) finalCategory = "shirt";
+        else if (urlLower.includes("jean")) finalCategory = "jeans";
+        else if (urlLower.includes("pant") || urlLower.includes("trouser") || urlLower.includes("chino")) finalCategory = "pants";
+        else if (urlLower.includes("sneaker")) finalCategory = "sneakers";
+        else if (urlLower.includes("shoe") || urlLower.includes("boot") || urlLower.includes("loafer")) finalCategory = "shoes";
+        else if (urlLower.includes("tshirt") || urlLower.includes("tee")) finalCategory = "tshirt";
+
+        for (const c of ["white", "black", "grey", "beige", "blue", "green", "olive", "brown", "maroon"]) {
+          if (urlLower.includes(c)) {
+            finalColor = c;
+            break;
+          }
+        }
       }
 
       const response = await fetch(`${API_BASE_URL}/wardrobe/${currentUser.id}`, {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({
-          category: form.category,
-          color: form.color,
-          fit: form.fit,
-          pattern: form.pattern,
-          style: form.style,
+          category: finalCategory,
+          color: finalColor,
+          fit: finalFit,
+          pattern: finalPattern,
+          style: finalStyle,
           image_url: finalImageUrl,
         }),
       });
@@ -290,7 +393,7 @@ export default function WardrobePage() {
       handleClearFile();
       setForm((prev) => ({ ...prev, image_url: "" }));
       await fetchWardrobe(currentUser.id);
-      setNotification({ type: "success", message: `Added ${form.color} ${form.category} to your wardrobe!` });
+      setNotification({ type: "success", message: `Added ${finalColor} ${finalCategory} to your wardrobe!` });
     } catch (error: unknown) {
       console.error(error);
       const msg = error instanceof Error ? error.message : "Could not add clothing item.";
@@ -391,35 +494,11 @@ export default function WardrobePage() {
         
         {/* ================= HEADER ================= */}
         <div className="mb-8 border-b border-[#e2e4e7] pb-8">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#dedad0] bg-white/90 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#45546a] shadow-2xs backdrop-blur-md">
-                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Wardrobe Vault</span>
-              </div>
-              <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">
-                My Digital Closet
-              </h1>
-              <p className="mt-1 max-w-xl text-xs sm:text-sm text-gray-600">
-                Organize your garments, spot wardrobe gaps, and let WearWise unlock effortless looks.
-              </p>
-            </div>
-
-            {/* Direct App Actions */}
-            <div className="flex items-center gap-2.5">
-              <Link
-                href="/wardrobe/next-purchase"
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-[#d4d6da] bg-white px-4 text-xs font-semibold text-gray-800 shadow-2xs transition hover:bg-gray-50 active:scale-95"
-              >
-                <span>📈 Gap Analysis</span>
-              </Link>
-              <Link
-                href="/style"
-                className="inline-flex h-11 items-center justify-center rounded-xl bg-[#171717] px-5 text-xs font-semibold text-white shadow-sm transition hover:bg-black active:scale-95"
-              >
-                <span>✨ Style Me →</span>
-              </Link>
-            </div>
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">
+              My Digital Closet
+            </h1>
+            <AnimatedWardrobeTagline />
           </div>
 
           {/* Closet Breakdown Counters */}
@@ -454,281 +533,215 @@ export default function WardrobePage() {
                 </h2>
               </div>
               <p className="mt-1 text-xs text-gray-500">
-                Register a piece to expand your daily outfit matrix.
+                Directly click a photo, upload an image, or use a URL.
               </p>
             </div>
 
-            <form onSubmit={addItem} className="mt-5 space-y-5">
-              
-              {/* Visual Category Picker */}
-              <div>
-                <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-gray-700">
-                  Category
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {CATEGORY_OPTIONS.map((cat) => {
-                    const isSelected = form.category === cat.value;
-                    return (
-                      <button
-                        key={cat.value}
-                        type="button"
-                        onClick={() => setForm({ ...form, category: cat.value })}
-                        className={`flex flex-col items-center justify-center rounded-xl border p-2.5 text-center transition-all cursor-pointer ${
-                          isSelected
-                            ? "border-black bg-[#171717] text-white shadow-xs"
-                            : "border-gray-200 bg-[#fbfbf9] text-gray-700 hover:border-gray-400 hover:bg-white"
-                        }`}
-                      >
-                        <span className="text-xl">{cat.icon}</span>
-                        <span className="mt-1 text-[11px] font-semibold">{cat.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+            <form onSubmit={addItem} className="mt-5 space-y-4">
+              {/* Upload Mode Selector */}
+              <div className="flex rounded-xl bg-[#f0f1f3] p-1 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setImageMode("upload")}
+                  className={`flex-1 rounded-lg py-2 transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                    imageMode === "upload"
+                      ? "bg-white text-black shadow-2xs font-bold"
+                      : "text-gray-500 hover:text-black"
+                  }`}
+                >
+                  <span>📸</span>
+                  <span>Photo / Upload</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImageMode("url")}
+                  className={`flex-1 rounded-lg py-2 transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                    imageMode === "url"
+                      ? "bg-white text-black shadow-2xs font-bold"
+                      : "text-gray-500 hover:text-black"
+                  }`}
+                >
+                  <span>🔗</span>
+                  <span>Image URL</span>
+                </button>
               </div>
 
-              {/* Visual Color Palette Picker */}
-              <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <label className="text-xs font-bold uppercase tracking-wider text-gray-700">
-                    Color
-                  </label>
-                  <span className="text-xs font-semibold capitalize text-gray-900">
-                    {form.color}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {COLOR_OPTIONS.map((c) => {
-                    const isSelected = form.color === c.value;
-                    return (
-                      <button
-                        key={c.value}
-                        type="button"
-                        onClick={() => setForm({ ...form, color: c.value })}
-                        title={c.label}
-                        className={`relative flex h-7 w-7 items-center justify-center rounded-full transition-transform cursor-pointer ${
-                          isSelected ? "ring-2 ring-black ring-offset-2 scale-110" : "hover:scale-105"
-                        } ${c.border ? "border border-gray-300" : ""}`}
-                        style={{ backgroundColor: c.hex }}
-                      >
-                        {isSelected && (
-                          <span
-                            className={`text-[10px] font-bold ${
-                              c.value === "white" || c.value === "beige" ? "text-black" : "text-white"
-                            }`}
-                          >
-                            ✓
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Fit Segmented Control */}
-              <div>
-                <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-gray-700">
-                  Fit
-                </label>
-                <div className="grid grid-cols-4 gap-1.5 rounded-xl bg-[#f4f5f6] p-1">
-                  {FIT_OPTIONS.map((fit) => {
-                    const isSelected = form.fit === fit;
-                    return (
-                      <button
-                        key={fit}
-                        type="button"
-                        onClick={() => setForm({ ...form, fit })}
-                        className={`rounded-lg py-1.5 text-center text-xs font-semibold capitalize transition-all cursor-pointer ${
-                          isSelected
-                            ? "bg-white text-black shadow-2xs"
-                            : "text-gray-500 hover:text-black"
-                        }`}
-                      >
-                        {fit}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Style & Pattern Controls */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Mode: Photo Upload / Camera Click */}
+              {imageMode === "upload" ? (
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700">
-                    Style
-                  </label>
-                  <select
-                    name="style"
-                    value={form.style}
-                    onChange={(e) => setForm({ ...form, style: e.target.value })}
-                    className="w-full rounded-xl border border-[#e2e4e7] bg-[#fbfbf9] p-2.5 text-xs font-medium text-gray-900 outline-none focus:border-black cursor-pointer"
-                  >
-                    {STYLE_OPTIONS.map((s) => (
-                      <option key={s} value={s}>
-                        {s.charAt(0).toUpperCase() + s.slice(1)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700">
-                    Pattern
-                  </label>
-                  <select
-                    name="pattern"
-                    value={form.pattern}
-                    onChange={(e) => setForm({ ...form, pattern: e.target.value })}
-                    className="w-full rounded-xl border border-[#e2e4e7] bg-[#fbfbf9] p-2.5 text-xs font-medium text-gray-900 outline-none focus:border-black cursor-pointer"
-                  >
-                    {PATTERN_OPTIONS.map((p) => (
-                      <option key={p} value={p}>
-                        {p.charAt(0).toUpperCase() + p.slice(1)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Photo Section with Upload / URL toggle */}
-              <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <label className="text-xs font-bold uppercase tracking-wider text-gray-700">
-                    Garment Photo
-                    <span className="ml-1 font-normal text-gray-400">(Optional)</span>
-                  </label>
-
-                  <div className="flex rounded-lg bg-[#f0f1f3] p-0.5 text-[11px] font-semibold">
-                    <button
-                      type="button"
-                      onClick={() => setImageMode("upload")}
-                      className={`rounded-md px-2.5 py-0.5 transition cursor-pointer ${
-                        imageMode === "upload" ? "bg-white text-black shadow-2xs" : "text-gray-500 hover:text-black"
-                      }`}
-                    >
-                      Upload
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setImageMode("url")}
-                      className={`rounded-md px-2.5 py-0.5 transition cursor-pointer ${
-                        imageMode === "url" ? "bg-white text-black shadow-2xs" : "text-gray-500 hover:text-black"
-                      }`}
-                    >
-                      URL
-                    </button>
-                  </div>
-                </div>
-
-                {imageMode === "upload" ? (
-                  <div>
-                    {previewUrl ? (
-                      <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-[#fbfbf9] p-2.5">
-                        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-[#f7f7f5] flex items-center justify-center">
-                          <img
-                            src={previewUrl}
-                            alt="Item preview"
-                            className="h-full w-full object-contain object-center"
-                          />
-                        </div>
-                        <div className="mt-2.5 flex items-center justify-between px-1">
-                          <span className="truncate text-xs font-medium text-gray-600 max-w-[200px]">
-                            {file?.name}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={handleClearFile}
-                            className="text-xs font-semibold text-red-600 hover:underline cursor-pointer"
-                          >
-                            Remove
-                          </button>
-                        </div>
-
-                        {/* AI Vision Status Indicator */}
-                        {analyzingImage && (
-                          <div className="mt-2.5 flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900 animate-pulse">
-                            <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-amber-700 border-t-transparent" />
-                            <span className="font-semibold">✨ AI Vision scanning garment features...</span>
-                          </div>
-                        )}
-
-                        {aiDetectedInfo && !analyzingImage && (
-                          <div className="mt-2.5 flex items-center justify-between rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-950 animate-pop-in">
-                            <div className="flex items-center gap-1.5 truncate">
-                              <span>✨</span>
-                              <span className="font-bold truncate">
-                                Auto-tagged: <span className="capitalize">{aiDetectedInfo.color} {aiDetectedInfo.category}</span>
-                              </span>
-                              {aiDetectedInfo.confidence && (
-                                <span className="rounded-full bg-emerald-200/80 px-1.5 py-0.2 text-[9px] font-bold text-emerald-900">
-                                  {Math.round(aiDetectedInfo.confidence * 100)}%
-                                </span>
-                              )}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setAiDetectedInfo(null)}
-                              className="text-[10px] font-semibold text-emerald-800 hover:underline shrink-0 ml-2 cursor-pointer"
-                            >
-                              Dismiss
-                            </button>
-                          </div>
-                        )}
+                  {previewUrl ? (
+                    <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-[#fbfbf9] p-3">
+                      <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-[#f7f7f5] flex items-center justify-center">
+                        <img
+                          src={previewUrl}
+                          alt="Garment preview"
+                          className="h-full w-full object-contain object-center"
+                        />
                       </div>
-                    ) : (
-                      <label
+                      
+                      <div className="mt-2.5 flex items-center justify-between px-1">
+                        <span className="truncate text-xs font-medium text-gray-600 max-w-[200px]">
+                          {file?.name || "Garment Photo"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleClearFile}
+                          className="text-xs font-semibold text-red-600 hover:underline cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      </div>
+
+                      {/* AI Scanning Status Indicator */}
+                      {analyzingImage && (
+                        <div className="mt-2.5 flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900 animate-pulse">
+                          <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-amber-700 border-t-transparent" />
+                          <span className="font-semibold">✨ AI scanning garment...</span>
+                        </div>
+                      )}
+
+                      {aiDetectedInfo && !analyzingImage && (
+                        <div className="mt-2.5 rounded-xl bg-emerald-50 border border-emerald-200 p-2.5 text-xs text-emerald-950 animate-pop-in">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <span>✨</span>
+                              <span className="font-bold">
+                                Auto-detected: <span className="capitalize">{aiDetectedInfo.color} {aiDetectedInfo.category}</span>
+                              </span>
+                            </div>
+                            {aiDetectedInfo.confidence && (
+                              <span className="rounded-full bg-emerald-200/80 px-1.5 py-0.2 text-[9px] font-bold text-emerald-900">
+                                {Math.round(aiDetectedInfo.confidence * 100)}%
+                              </span>
+                            )}
+                          </div>
+                          {aiDetectedInfo.fit && (
+                            <p className="mt-1 text-[11px] text-emerald-800">
+                              Fit: <span className="capitalize font-semibold">{aiDetectedInfo.fit}</span>
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {/* Drag & Drop or Click Area */}
+                      <div
                         onDragEnter={handleDrag}
                         onDragLeave={handleDrag}
                         onDragOver={handleDrag}
                         onDrop={handleDrop}
+                        onClick={() => fileInputRef.current?.click()}
                         className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center cursor-pointer transition ${
                           dragActive
                             ? "border-black bg-gray-50 scale-102"
                             : "border-[#e2e4e7] bg-[#fbfbf9] hover:border-gray-400 hover:bg-white"
                         }`}
                       >
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-2xs text-base">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-2xs text-2xl">
                           📸
                         </div>
-                        <p className="mt-2 text-xs font-bold text-gray-800">
+                        <p className="mt-2 text-xs font-bold text-gray-900">
                           Click to upload or drag & drop
                         </p>
-                        <p className="mt-0.5 text-[10px] text-gray-400">
-                          JPG, PNG, WebP up to 10MB
+                        <p className="mt-0.5 text-[11px] text-gray-400">
+                          PNG, JPG, WebP up to 10MB
                         </p>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => {
-                            if (e.target.files?.[0]) {
-                              handleFileSelect(e.target.files[0]);
-                            }
-                          }}
-                          className="hidden"
-                        />
-                      </label>
-                    )}
+                      </div>
+
+                      {/* Direct Action Buttons: Camera Click vs Choose File */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => cameraInputRef.current?.click()}
+                          className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-[#fbfbf9] py-2.5 text-xs font-semibold text-gray-800 hover:bg-white hover:border-gray-400 transition cursor-pointer active:scale-98"
+                        >
+                          <span>📷</span>
+                          <span>Click Photo</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-[#fbfbf9] py-2.5 text-xs font-semibold text-gray-800 hover:bg-white hover:border-gray-400 transition cursor-pointer active:scale-98"
+                        >
+                          <span>📁</span>
+                          <span>Upload File</span>
+                        </button>
+                      </div>
+
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          if (e.target.files?.[0]) {
+                            handleFileSelect(e.target.files[0]);
+                          }
+                        }}
+                        className="hidden"
+                      />
+                      <input
+                        ref={cameraInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={(e) => {
+                          if (e.target.files?.[0]) {
+                            handleFileSelect(e.target.files[0]);
+                          }
+                        }}
+                        className="hidden"
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Mode: URL */
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700">
+                      Garment Image URL
+                    </label>
+                    <input
+                      name="image_url"
+                      type="url"
+                      placeholder="https://example.com/item.jpg"
+                      value={form.image_url}
+                      onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+                      className="w-full rounded-xl border border-[#e2e4e7] bg-[#fbfbf9] p-3 text-xs font-medium text-gray-900 placeholder:text-gray-400 outline-none focus:border-black"
+                    />
                   </div>
-                ) : (
-                  <input
-                    name="image_url"
-                    type="url"
-                    placeholder="https://example.com/item.jpg"
-                    value={form.image_url}
-                    onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-                    className="w-full rounded-xl border border-[#e2e4e7] bg-[#fbfbf9] p-3 text-xs font-medium text-gray-900 placeholder:text-gray-400 outline-none focus:border-black"
-                  />
-                )}
-              </div>
+
+                  {form.image_url.trim() && (
+                    <div className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl border border-gray-200 bg-[#f7f7f5] p-2 flex items-center justify-center">
+                      <img
+                        src={form.image_url}
+                        alt="URL preview"
+                        className="h-full w-full object-contain"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLElement).style.display = "none";
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={uploading}
-                className="w-full rounded-xl bg-[#171717] px-5 py-3.5 text-xs font-bold text-white transition hover:bg-black active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-sm"
+                disabled={uploading || (imageMode === "upload" && !file) || (imageMode === "url" && !form.image_url.trim())}
+                className="w-full rounded-xl bg-[#171717] px-5 py-3.5 text-xs font-bold text-white transition hover:bg-black active:scale-98 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-sm"
               >
-                {uploading ? "Registering Piece..." : "+ Add to Wardrobe"}
+                {uploading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                    <span>Adding to Wardrobe...</span>
+                  </span>
+                ) : (
+                  "+ Add to Wardrobe"
+                )}
               </button>
             </form>
           </section>
@@ -807,9 +820,6 @@ export default function WardrobePage() {
                 <h3 className="mt-4 text-lg font-bold text-gray-950">
                   Your wardrobe is empty
                 </h3>
-                <p className="mx-auto mt-1 max-w-sm text-xs text-gray-500">
-                  Register your daily tops, trousers, and shoes on the left to start generating outfits.
-                </p>
               </div>
             ) : filteredItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-[#dedad0] bg-white p-10 text-center shadow-2xs">
