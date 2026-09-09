@@ -14,9 +14,9 @@ const SKIN_TONES = [
 ] as const;
 
 const GENDER_OPTIONS = [
-  { value: "male", label: "Male", icon: "👨", desc: "Men's style & silhouettes" },
-  { value: "female", label: "Female", icon: "👩", desc: "Women's style & silhouettes" },
-  { value: "unisex", label: "Non-Binary / Unisex", icon: "✨", desc: "Fluid & gender-neutral style" },
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+  { value: "other", label: "Other" },
 ] as const;
 
 const TOP_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL"] as const;
@@ -512,7 +512,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className="mt-5 grid gap-4 sm:grid-cols-3">
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700">
                   Full Name
@@ -568,60 +568,34 @@ export default function ProfilePage() {
                   />
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Section 2: Gender Identity */}
-          <div>
-            <div className="flex items-center justify-between border-b border-[#eceef0] pb-2.5">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-900">
-                2. Gender Identity
-              </h2>
-              <span className="text-xs font-semibold text-gray-500 capitalize">
-                Selected: {GENDER_OPTIONS.find((g) => g.value === form.gender)?.label || form.gender}
-              </span>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {GENDER_OPTIONS.map((gender) => {
-                const isSelected = form.gender === gender.value;
-                return (
-                  <button
-                    key={gender.value}
-                    type="button"
-                    onClick={() => setForm({ ...form, gender: gender.value })}
-                    className={`flex items-center sm:flex-col sm:items-start gap-3.5 p-4 rounded-2xl border transition-all cursor-pointer text-left ${
-                      isSelected
-                        ? "border-black bg-[#171717] text-white shadow-md ring-1 ring-black"
-                        : "border-gray-200 bg-[#fbfbf9] text-gray-900 hover:border-gray-400 hover:bg-white"
-                    }`}
+              <div>
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700">
+                  Gender
+                </label>
+                <div className="relative">
+                  <select
+                    name="gender"
+                    value={form.gender}
+                    onChange={handleChange}
+                    className="w-full appearance-none rounded-xl border border-[#e2e4e7] bg-[#fbfbf9] py-3 pl-4 pr-10 text-xs sm:text-sm text-gray-900 outline-none transition focus:border-black focus:bg-white focus:ring-1 focus:ring-black cursor-pointer"
                   >
-                    <span className="text-2xl sm:text-3xl">{gender.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs sm:text-sm font-bold">{gender.label}</span>
-                        {isSelected && (
-                          <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-                        )}
-                      </div>
-                      <p
-                        className={`text-[11px] mt-0.5 line-clamp-1 ${
-                          isSelected ? "text-gray-300" : "text-gray-500"
-                        }`}
-                      >
-                        {gender.desc}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                  <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
+                    ▼
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Section 3: Body Proportions */}
+          {/* Section 2: Body Proportions */}
           <div>
             <h2 className="text-sm font-bold uppercase tracking-wider text-gray-900 border-b border-[#eceef0] pb-2.5">
-              3. Body Proportions
+              2. Body Proportions
             </h2>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -665,51 +639,30 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Section 4: Size Chart & Precision Measurements */}
+          {/* Section 3: Size Chart & Precision Measurements */}
           <div>
-            <div className="flex items-center justify-between border-b border-[#eceef0] pb-2.5">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-900">
-                  4. Size Chart & Fit Measurements
-                </h2>
-                <span className="inline-flex items-center rounded-md bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-neutral-600 border border-neutral-200">
-                  📐 Smart Sizing
-                </span>
-              </div>
-              <span className="text-xs text-gray-500 hidden sm:inline">
-                {isFemale ? "Women's Fit Calibrated" : "Men's Fit Calibrated"}
-              </span>
-            </div>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-gray-900 border-b border-[#eceef0] pb-2.5">
+              3. Size Chart & Fit Measurements
+            </h2>
 
-            <p className="mt-2 text-xs text-gray-500">
-              {isFemale
-                ? "Calibrated for women's proportions (Bust, Waist & Hip). Pick quick sizes or type your exact numbers."
-                : "Calibrated for men's proportions (Chest, Waist & Hip). Pick quick sizes or type your exact numbers."}
-            </p>
-
-            {/* Custom Body Measurements Grid */}
-            <div className="mt-4 grid gap-5 sm:grid-cols-3">
+            {/* Body Measurements Chips */}
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
               
               {/* Chest / Bust */}
               <div className="rounded-2xl border border-gray-200 bg-[#fafaf8] p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-gray-900">
-                    {isFemale ? "Bust / Breast Size" : "Chest Size"}
-                  </label>
-                  <span className="text-[11px] font-semibold text-gray-500">
-                    {form.chest_bust ? `${form.chest_bust}"` : "Not set"}
-                  </span>
-                </div>
+                <label className="text-xs font-bold text-gray-900 block mb-2.5">
+                  {isFemale ? "Bust / Breast Size" : "Chest Size"}
+                </label>
                 
-                <div className="flex flex-wrap gap-1.5 mb-3">
+                <div className="flex flex-wrap gap-1.5">
                   {chestBustPresets.map((size) => (
                     <button
                       key={size}
                       type="button"
-                      onClick={() => setForm({ ...form, chest_bust: size })}
-                      className={`h-7 px-2 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                      onClick={() => setForm({ ...form, chest_bust: form.chest_bust === size ? "" : size })}
+                      className={`h-8 px-2.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                         form.chest_bust === size
-                          ? "bg-black text-white"
+                          ? "bg-black text-white shadow-xs"
                           : "bg-white border border-gray-200 text-gray-700 hover:border-gray-400"
                       }`}
                     >
@@ -717,120 +670,66 @@ export default function ProfilePage() {
                     </button>
                   ))}
                 </div>
-
-                <div className="relative">
-                  <input
-                    name="chest_bust"
-                    placeholder="Custom (e.g. 38)"
-                    value={form.chest_bust}
-                    onChange={handleChange}
-                    className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-3 pr-8 text-xs text-gray-900 outline-none focus:border-black"
-                  />
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-bold">
-                    in
-                  </span>
-                </div>
               </div>
 
-              {/* Waist (Kamar) */}
+              {/* Waist */}
               <div className="rounded-2xl border border-gray-200 bg-[#fafaf8] p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-gray-900">
-                    Waist Size (Kamar)
-                  </label>
-                  <span className="text-[11px] font-semibold text-gray-500">
-                    {form.waist_size ? `${form.waist_size}"` : "Not set"}
-                  </span>
-                </div>
+                <label className="text-xs font-bold text-gray-900 block mb-2.5">
+                  Waist Size
+                </label>
 
-                <div className="flex flex-wrap gap-1.5 mb-3">
+                <div className="flex flex-wrap gap-1.5">
                   {waistPresets.map((size) => (
                     <button
                       key={size}
                       type="button"
-                      onClick={() => setForm({ ...form, waist_size: size })}
-                      className={`h-7 px-2 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                      onClick={() => setForm({ ...form, waist_size: form.waist_size === size ? "" : size })}
+                      className={`h-8 px-2.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                         form.waist_size === size
-                          ? "bg-black text-white"
+                          ? "bg-black text-white shadow-xs"
                           : "bg-white border border-gray-200 text-gray-700 hover:border-gray-400"
                       }`}
                     >
                       {size}&quot;
                     </button>
                   ))}
-                </div>
-
-                <div className="relative">
-                  <input
-                    name="waist_size"
-                    placeholder="Custom (e.g. 32)"
-                    value={form.waist_size}
-                    onChange={handleChange}
-                    className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-3 pr-8 text-xs text-gray-900 outline-none focus:border-black"
-                  />
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-bold">
-                    in
-                  </span>
                 </div>
               </div>
 
               {/* Hip Size */}
               <div className="rounded-2xl border border-gray-200 bg-[#fafaf8] p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-gray-900">
-                    Hip Size
-                  </label>
-                  <span className="text-[11px] font-semibold text-gray-500">
-                    {form.hip_size ? `${form.hip_size}"` : "Not set"}
-                  </span>
-                </div>
+                <label className="text-xs font-bold text-gray-900 block mb-2.5">
+                  Hip Size
+                </label>
 
-                <div className="flex flex-wrap gap-1.5 mb-3">
+                <div className="flex flex-wrap gap-1.5">
                   {hipPresets.map((size) => (
                     <button
                       key={size}
                       type="button"
-                      onClick={() => setForm({ ...form, hip_size: size })}
-                      className={`h-7 px-2 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                      onClick={() => setForm({ ...form, hip_size: form.hip_size === size ? "" : size })}
+                      className={`h-8 px-2.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                         form.hip_size === size
-                          ? "bg-black text-white"
+                          ? "bg-black text-white shadow-xs"
                           : "bg-white border border-gray-200 text-gray-700 hover:border-gray-400"
                       }`}
                     >
                       {size}&quot;
                     </button>
                   ))}
-                </div>
-
-                <div className="relative">
-                  <input
-                    name="hip_size"
-                    placeholder="Custom (e.g. 40)"
-                    value={form.hip_size}
-                    onChange={handleChange}
-                    className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-3 pr-8 text-xs text-gray-900 outline-none focus:border-black"
-                  />
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-bold">
-                    in
-                  </span>
                 </div>
               </div>
 
             </div>
 
             {/* Standard Garment Sizes (Top, Bottom, Shoe) */}
-            <div className="mt-6 space-y-4 pt-4 border-t border-gray-100">
+            <div className="mt-5 space-y-4 pt-4 border-t border-gray-100">
               
               {/* Top Size */}
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-gray-700">
-                    Top Size (Upperwear / Shirts & Tees)
-                  </label>
-                  <span className="text-xs font-bold text-black bg-gray-100 px-2.5 py-0.5 rounded-full">
-                    {form.top_size}
-                  </span>
-                </div>
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-700 block mb-2">
+                  Top Size (Upperwear)
+                </label>
                 <div className="flex flex-wrap gap-2">
                   {TOP_SIZES.map((size) => {
                     const isSelected = form.top_size === size;
@@ -852,16 +751,11 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* Bottom / Kamar Size */}
+              {/* Bottom Size */}
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-gray-700">
-                    Bottom Size (Kamar / Pants & Jeans)
-                  </label>
-                  <span className="text-xs font-bold text-black bg-gray-100 px-2.5 py-0.5 rounded-full">
-                    Size {form.bottom_size}
-                  </span>
-                </div>
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-700 block mb-2">
+                  Bottom Size (Pants / Jeans)
+                </label>
                 <div className="flex flex-wrap gap-2">
                   {BOTTOM_SIZES.map((size) => {
                     const isSelected = form.bottom_size === size;
@@ -883,16 +777,11 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* Shoe Number */}
+              {/* Shoe Size */}
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-gray-700">
-                    Shoe Size (Footwear)
-                  </label>
-                  <span className="text-xs font-bold text-black bg-gray-100 px-2.5 py-0.5 rounded-full">
-                    {form.shoe_size}
-                  </span>
-                </div>
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-700 block mb-2">
+                  Shoe Size (Footwear)
+                </label>
                 <div className="flex flex-wrap gap-2">
                   {SHOE_SIZES.map((size) => {
                     const isSelected = form.shoe_size === size;
