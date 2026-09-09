@@ -72,6 +72,17 @@ export default function Navbar() {
               </Link>
 
               <Link
+                href="/saved"
+                className={`rounded-lg px-3 py-2 transition ${
+                  pathname === "/saved"
+                    ? "bg-gray-100 text-black font-semibold"
+                    : "text-gray-600 hover:bg-gray-100 hover:text-black"
+                }`}
+              >
+                Saved Looks
+              </Link>
+
+              <Link
                 href="/wardrobe/next-purchase"
                 className={`hidden rounded-lg px-3 py-2 transition sm:block ${
                   pathname === "/wardrobe/next-purchase"
