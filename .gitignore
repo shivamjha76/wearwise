@@ -50,6 +50,8 @@ pnpm-debug.log*
 # Node / Next.js
 node_modules/
 frontend/node_modules/
+package-lock.json
+frontend/package-lock.json
 .next/
 frontend/.next/
 out/
