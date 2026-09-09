@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import uuid
+from pathlib import Path
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -17,6 +19,53 @@ router = APIRouter(
     prefix="/wardrobe",
     tags=["Wardrobe"]
 )
+
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@router.post("/upload")
+async def upload_wardrobe_image(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No filename provided"
+        )
+
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid file type '{ext}'. Allowed types: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+        )
+
+    unique_filename = f"{uuid.uuid4().hex}{ext}"
+    file_path = UPLOAD_DIR / unique_filename
+
+    file_size = 0
+    with open(file_path, "wb") as buffer:
+        while chunk := await file.read(1024 * 1024):
+            file_size += len(chunk)
+            if file_size > MAX_FILE_SIZE:
+                buffer.close()
+                if file_path.exists():
+                    file_path.unlink()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="File size exceeds maximum limit of 10MB"
+                )
+            buffer.write(chunk)
+
+    return {
+        "image_url": f"/uploads/{unique_filename}",
+        "filename": unique_filename
+    }
 
 
 @router.post(
@@ -113,6 +162,15 @@ def delete_wardrobe_item(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to delete this wardrobe item"
         )
+
+    if item.image_url and item.image_url.startswith("/uploads/"):
+        filename = item.image_url.replace("/uploads/", "")
+        file_path = UPLOAD_DIR / filename
+        if file_path.exists():
+            try:
+                file_path.unlink()
+            except Exception:
+                pass
 
     db.delete(item)
     db.commit()

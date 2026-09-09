@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, getImageUrl } from "@/lib/api";
 import { getStoredUser, getAuthHeaders } from "@/lib/auth";
 
 type WardrobeItem = {
@@ -101,7 +102,7 @@ const styleOptions = [
 
 function getImage(item: WardrobeItem) {
     if (item.image_url) {
-        return item.image_url;
+        return getImageUrl(item.image_url) || item.image_url;
     }
 
     const text = `${item.color}+${item.category}`;
@@ -182,6 +183,8 @@ export default function StylePage() {
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+    const [saveMessage, setSaveMessage] = useState("");
 
     useEffect(() => {
         const user = getStoredUser();
@@ -200,11 +203,13 @@ export default function StylePage() {
 
         setLoading(true);
         setError("");
+        setSaveStatus("idle");
+        setSaveMessage("");
 
         try {
             const [outfitResponse, wardrobeResponse] = await Promise.all([
                 fetch(
-                    `${API_BASE_URL}/outfits/${user.id}?occasion=${occasion}&style_vibe=${styleVibe}`,
+                    `${API_BASE_URL}/outfits/${user.id}?occasion=${occasion}&style_vibe=${styleVibe}&weather=${weather}`,
                     {
                         method: "POST",
                         headers: getAuthHeaders(),
@@ -265,6 +270,42 @@ export default function StylePage() {
     const shoes = outfit?.recommendation
         ? getWardrobeItem(outfit.recommendation.shoes_id)
         : undefined;
+
+    const saveOutfit = async () => {
+        const user = getStoredUser();
+        if (!user || !outfit || !top || !bottom || !shoes) return;
+
+        setSaveStatus("saving");
+        setSaveMessage("");
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/outfits/${user.id}/save`, {
+                method: "POST",
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                    top_id: top.id,
+                    bottom_id: bottom.id,
+                    shoes_id: shoes.id,
+                    occasion: outfit.occasion,
+                    style_vibe: styleVibe || null,
+                    score: outfit.recommendation.score,
+                    explanation: outfit.explanation || "AI explanation unavailable",
+                }),
+            });
+
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.detail || "Failed to save outfit");
+            }
+
+            setSaveStatus("saved");
+            setSaveMessage("Saved to your Lookbook!");
+        } catch (err: unknown) {
+            console.error(err);
+            setSaveStatus("error");
+            setSaveMessage(err instanceof Error ? err.message : "Failed to save outfit");
+        }
+    };
 
     return (
         <main className="min-h-screen bg-white">
@@ -406,20 +447,46 @@ export default function StylePage() {
                             {/* OUTFIT CARD */}
                             <section className="rounded-2xl border border-[#e4e5e7] bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
 
-                                <div className="flex items-start justify-between gap-4">
+                                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                                     <div>
-                                        <h2 className="text-[27px] font-bold tracking-tight text-black">
-                                            Your Outfit
-                                        </h2>
+                                        <div className="flex items-center gap-2.5">
+                                            <h2 className="text-[27px] font-bold tracking-tight text-black">
+                                                Your Outfit
+                                            </h2>
+                                            <span className="rounded-full bg-[#fff4d7] px-3 py-1 text-xs font-bold text-[#5d4a18]">
+                                                ⭐ {outfit.recommendation.score}% Match
+                                            </span>
+                                        </div>
 
-                                        <p className="mt-1 text-[16px] text-[#45546a]">
+                                        <p className="mt-1 text-[15px] text-[#45546a]">
                                             A clean, comfortable and versatile look for a{" "}
-                                            {outfit.occasion} day.
+                                            <span className="font-semibold capitalize text-black">{outfit.occasion}</span> day
+                                            {weather ? <span> in <span className="font-semibold capitalize text-black">{weather}</span> weather</span> : ""}.
                                         </p>
                                     </div>
 
-                                    <div className="shrink-0 rounded-full bg-[#fff4d7] px-3.5 py-2 text-[13px] font-medium text-[#5d4a18]">
-                                        ⭐ AI Recommended
+                                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                        <button
+                                            onClick={saveOutfit}
+                                            disabled={saveStatus === "saving" || saveStatus === "saved"}
+                                            className={`flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-semibold shadow-sm transition ${
+                                                saveStatus === "saved"
+                                                    ? "bg-emerald-600 text-white cursor-default"
+                                                    : "bg-black text-white hover:bg-gray-800 disabled:opacity-60"
+                                            }`}
+                                        >
+                                            {saveStatus === "saving" && "Saving..."}
+                                            {saveStatus === "saved" && "✓ Saved to Lookbook"}
+                                            {saveStatus === "idle" && "★ Save Outfit"}
+                                            {saveStatus === "error" && "Try Again"}
+                                        </button>
+
+                                        <Link
+                                            href="/outfit"
+                                            className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 transition"
+                                        >
+                                            Detailed View →
+                                        </Link>
                                     </div>
                                 </div>
 
@@ -429,6 +496,15 @@ export default function StylePage() {
                                     <ClothingCard item={bottom} />
                                     <ClothingCard item={shoes} />
                                 </div>
+
+                                {saveStatus === "saved" && (
+                                    <div className="mt-5 flex items-center justify-between rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-xs text-emerald-900">
+                                        <span>✓ This outfit has been added to your personal Lookbook!</span>
+                                        <Link href="/saved" className="font-bold underline underline-offset-2 hover:text-emerald-950">
+                                            View in Lookbook →
+                                        </Link>
+                                    </div>
+                                )}
 
                             </section>
 

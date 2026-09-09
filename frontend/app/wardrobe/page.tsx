@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, getImageUrl } from "@/lib/api";
 import { getStoredUser, getAuthHeaders, User } from "@/lib/auth";
 
 type WardrobeItem = {
@@ -31,6 +31,63 @@ export default function WardrobePage() {
         style: "casual",
         image_url: "",
     });
+
+    const [imageMode, setImageMode] = useState<"upload" | "url">("upload");
+    const [file, setFile] = useState<File | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [uploading, setUploading] = useState(false);
+    const [dragActive, setDragActive] = useState(false);
+
+    useEffect(() => {
+        return () => {
+            if (previewUrl && previewUrl.startsWith("blob:")) {
+                URL.revokeObjectURL(previewUrl);
+            }
+        };
+    }, [previewUrl]);
+
+    const handleFileSelect = (selectedFile: File) => {
+        if (!selectedFile.type.startsWith("image/")) {
+            alert("Please select an image file (JPG, PNG, WebP).");
+            return;
+        }
+        if (selectedFile.size > 10 * 1024 * 1024) {
+            alert("Image size should be less than 10MB.");
+            return;
+        }
+        if (previewUrl && previewUrl.startsWith("blob:")) {
+            URL.revokeObjectURL(previewUrl);
+        }
+        setFile(selectedFile);
+        setPreviewUrl(URL.createObjectURL(selectedFile));
+    };
+
+    const handleClearFile = () => {
+        if (previewUrl && previewUrl.startsWith("blob:")) {
+            URL.revokeObjectURL(previewUrl);
+        }
+        setFile(null);
+        setPreviewUrl(null);
+    };
+
+    const handleDrag = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.type === "dragenter" || e.type === "dragover") {
+            setDragActive(true);
+        } else if (e.type === "dragleave") {
+            setDragActive(false);
+        }
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragActive(false);
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            handleFileSelect(e.dataTransfer.files[0]);
+        }
+    };
 
     const fetchWardrobe = async (targetUserId: number) => {
         try {
@@ -77,8 +134,38 @@ export default function WardrobePage() {
         e.preventDefault();
 
         if (!currentUser) return;
+        setUploading(true);
 
         try {
+            let finalImageUrl: string | null = null;
+
+            if (imageMode === "upload" && file) {
+                const formData = new FormData();
+                formData.append("file", file);
+
+                const token =
+                    typeof window !== "undefined"
+                        ? localStorage.getItem("wearwise_token")
+                        : null;
+                const uploadRes = await fetch(`${API_BASE_URL}/wardrobe/upload`, {
+                    method: "POST",
+                    headers: {
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: formData,
+                });
+
+                if (!uploadRes.ok) {
+                    const errData = await uploadRes.json().catch(() => ({}));
+                    throw new Error(errData.detail || "Failed to upload image");
+                }
+
+                const uploadData = await uploadRes.json();
+                finalImageUrl = uploadData.image_url;
+            } else if (imageMode === "url" && form.image_url.trim()) {
+                finalImageUrl = form.image_url.trim();
+            }
+
             const response = await fetch(
                 `${API_BASE_URL}/wardrobe/${currentUser.id}`,
                 {
@@ -90,7 +177,7 @@ export default function WardrobePage() {
                         fit: form.fit,
                         pattern: form.pattern,
                         style: form.style,
-                        image_url: form.image_url || null,
+                        image_url: finalImageUrl,
                     }),
                 }
             );
@@ -99,10 +186,18 @@ export default function WardrobePage() {
                 throw new Error("Failed to add item");
             }
 
+            handleClearFile();
+            setForm((prev) => ({ ...prev, image_url: "" }));
             await fetchWardrobe(currentUser.id);
-        } catch (error) {
+        } catch (error: unknown) {
             console.error(error);
-            alert("Could not add clothing item.");
+            if (error instanceof Error) {
+                alert(error.message);
+            } else {
+                alert("Could not add clothing item.");
+            }
+        } finally {
+            setUploading(false);
         }
     };
 
@@ -277,29 +372,117 @@ export default function WardrobePage() {
                                     <option value="minimal">Minimal</option>
                                 </select>
                             </div>
+                            {/* Image Section */}
                             <div>
-                                <label className="mb-2 block text-sm font-medium text-gray-900">
-                                    Image URL
-                                    <span className="ml-1 font-normal text-gray-500">
-                                        (Optional)
-                                    </span>
-                                </label>
+                                <div className="mb-2 flex items-center justify-between">
+                                    <label className="text-sm font-medium text-gray-900">
+                                        Clothing Photo
+                                        <span className="ml-1 font-normal text-gray-500">
+                                            (Optional)
+                                        </span>
+                                    </label>
 
-                                <input
-                                    name="image_url"
-                                    type="url"
-                                    placeholder="https://example.com/shirt.jpg"
-                                    value={form.image_url}
-                                    onChange={handleChange}
-                                    className="w-full rounded-xl border border-gray-200 bg-gray-50 p-3.5 text-gray-900 placeholder:text-gray-400 outline-none focus:border-black"
-                                />
+                                    {/* Mode switcher */}
+                                    <div className="flex rounded-lg bg-gray-100 p-0.5 text-xs font-semibold">
+                                        <button
+                                            type="button"
+                                            onClick={() => setImageMode("upload")}
+                                            className={`rounded-md px-2.5 py-1 transition ${
+                                                imageMode === "upload"
+                                                    ? "bg-white text-black shadow-sm"
+                                                    : "text-gray-500 hover:text-black"
+                                            }`}
+                                        >
+                                            Upload
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setImageMode("url")}
+                                            className={`rounded-md px-2.5 py-1 transition ${
+                                                imageMode === "url"
+                                                    ? "bg-white text-black shadow-sm"
+                                                    : "text-gray-500 hover:text-black"
+                                            }`}
+                                        >
+                                            URL Link
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {imageMode === "upload" ? (
+                                    <div>
+                                        {previewUrl ? (
+                                            <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 p-2">
+                                                <img
+                                                    src={previewUrl}
+                                                    alt="Item preview"
+                                                    className="h-44 w-full rounded-xl object-cover"
+                                                />
+                                                <div className="mt-2 flex items-center justify-between px-1">
+                                                    <span className="truncate text-xs font-medium text-gray-600 max-w-[200px]">
+                                                        {file?.name}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleClearFile}
+                                                        className="text-xs font-semibold text-red-600 hover:underline"
+                                                    >
+                                                        Remove Photo
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <label
+                                                onDragEnter={handleDrag}
+                                                onDragLeave={handleDrag}
+                                                onDragOver={handleDrag}
+                                                onDrop={handleDrop}
+                                                className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center cursor-pointer transition ${
+                                                    dragActive
+                                                        ? "border-black bg-gray-50"
+                                                        : "border-gray-200 bg-gray-50/50 hover:border-gray-400 hover:bg-white"
+                                                }`}
+                                            >
+                                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm text-lg">
+                                                    📸
+                                                </div>
+                                                <p className="mt-2 text-xs font-semibold text-gray-800">
+                                                    Click to upload or drag & drop
+                                                </p>
+                                                <p className="mt-1 text-[11px] text-gray-400">
+                                                    PNG, JPG, WebP up to 10MB
+                                                </p>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={(e) => {
+                                                        if (e.target.files?.[0]) {
+                                                            handleFileSelect(e.target.files[0]);
+                                                        }
+                                                    }}
+                                                    className="hidden"
+                                                />
+                                            </label>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <input
+                                        name="image_url"
+                                        type="url"
+                                        placeholder="https://example.com/shirt.jpg"
+                                        value={form.image_url}
+                                        onChange={handleChange}
+                                        className="w-full rounded-xl border border-gray-200 bg-gray-50 p-3.5 text-gray-900 placeholder:text-gray-400 outline-none focus:border-black"
+                                    />
+                                )}
                             </div>
 
                             <button
                                 type="submit"
-                                className="w-full rounded-xl bg-black px-5 py-4 font-semibold text-white transition hover:bg-gray-800"
+                                disabled={uploading}
+                                className="w-full rounded-xl bg-black px-5 py-4 font-semibold text-white transition hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                + Add to Wardrobe
+                                {uploading ? "Saving item..." : "+ Add to Wardrobe"}
                             </button>
 
                         </div>
@@ -343,9 +526,12 @@ export default function WardrobePage() {
                                         <div className="mb-4 overflow-hidden rounded-2xl bg-gray-100">
                                             {item.image_url ? (
                                                 <img
-                                                    src={item.image_url}
+                                                    src={getImageUrl(item.image_url) || ""}
                                                     alt={`${item.color} ${item.category}`}
-                                                    className="h-56 w-full object-cover"
+                                                    className="h-56 w-full object-cover transition duration-300 group-hover:scale-105"
+                                                    onError={(e) => {
+                                                        (e.currentTarget as HTMLElement).style.display = "none";
+                                                    }}
                                                 />
                                             ) : (
                                                 <div className="flex h-56 items-center justify-center text-5xl">

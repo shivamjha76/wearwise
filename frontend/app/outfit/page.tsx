@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, getImageUrl } from "@/lib/api";
 import { getStoredUser, getAuthHeaders } from "@/lib/auth";
 
 type Recommendation = {
@@ -19,6 +19,8 @@ type Recommendation = {
 type OutfitData = {
     user_id: number;
     occasion: string;
+    style_vibe?: string;
+    weather?: string;
     recommendation?: Recommendation;
     recommendations?: Recommendation[];
     explanation?: string;
@@ -176,8 +178,10 @@ export default function OutfitPage() {
                         Your Recommended Look ✨
                     </h1>
 
-                    <p className="mt-2 capitalize text-gray-600">
-                        Perfect for your {data.occasion}
+                    <p className="mt-2 text-gray-600">
+                        Tailored for your <span className="font-semibold capitalize text-black">{data.occasion}</span>
+                        {data.weather ? <span> in <span className="font-semibold capitalize text-black">{data.weather}</span> weather</span> : ""}
+                        {data.style_vibe ? <span> · <span className="font-semibold capitalize text-black">{data.style_vibe}</span> vibe</span> : ""}
                     </p>
                 </div>
 
@@ -324,7 +328,7 @@ function ClothingCard({
             <div className="mb-4 overflow-hidden rounded-xl bg-gray-100">
                 {item.image_url ? (
                     <img
-                        src={item.image_url}
+                        src={getImageUrl(item.image_url) || ""}
                         alt={`${item.color} ${item.category}`}
                         className="h-56 w-full object-cover"
                     />

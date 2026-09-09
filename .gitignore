@@ -59,3 +59,8 @@ frontend/out/
 *.swo
 .DS_Store
 Thumbs.db
+
+# User uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
+

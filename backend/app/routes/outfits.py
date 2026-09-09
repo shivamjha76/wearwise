@@ -19,6 +19,7 @@ def get_outfits(
     user_id: int,
     occasion: str,
     style_vibe: str | None = None,
+    weather: str | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -42,7 +43,7 @@ def get_outfits(
     if not wardrobe:
         raise HTTPException(status_code=400, detail="Wardrobe is empty")
 
-    outfits = generate_outfits(wardrobe, profile, occasion, style_vibe)
+    outfits = generate_outfits(wardrobe, profile, occasion, style_vibe, weather)
 
     if not outfits:
         raise HTTPException(
@@ -55,7 +56,7 @@ def get_outfits(
     shoes = best["shoes"]
 
     try:
-        explanation = explain_outfit(top, bottom, shoes, profile, occasion)
+        explanation = explain_outfit(top, bottom, shoes, profile, occasion, weather)
     except Exception as exc:
         print(repr(exc))
         explanation = "AI explanation unavailable"
@@ -64,6 +65,7 @@ def get_outfits(
         "user_id": user_id,
         "occasion": occasion,
         "style_vibe": style_vibe,
+        "weather": weather,
         "recommendation": {
             "top_id": best["top"].id,
             "bottom_id": best["bottom"].id,

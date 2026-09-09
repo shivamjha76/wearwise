@@ -38,7 +38,13 @@ export default function LoginPage() {
       router.push("/wardrobe");
     } catch (err: unknown) {
       if (err instanceof Error) {
-        setError(err.message);
+        if (err.message === "Failed to fetch") {
+          setError(
+            `Unable to connect to the server (${API_BASE_URL}). Please ensure the backend is running.`
+          );
+        } else {
+          setError(err.message);
+        }
       } else {
         setError("Something went wrong. Please check your backend.");
       }

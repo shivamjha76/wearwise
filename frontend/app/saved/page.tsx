@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, getImageUrl } from "@/lib/api";
 import { getStoredUser, getAuthHeaders } from "@/lib/auth";
 
 type WardrobePiece = {
@@ -259,7 +259,7 @@ function PieceThumbnail({
         <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3 text-center">
             {item.image_url ? (
                 <img
-                    src={item.image_url}
+                    src={getImageUrl(item.image_url) || ""}
                     alt={item.category}
                     className="mx-auto h-20 w-full rounded-xl object-cover"
                 />

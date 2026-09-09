@@ -7,7 +7,8 @@ def score_outfit(
     shoes,
     profile,
     occasion,
-    style_vibe=None
+    style_vibe=None,
+    weather=None
 ):
     score = 0
 
@@ -165,6 +166,40 @@ def score_outfit(
     if (shoes.color or "").lower() in ["white", "black"]:
         score += 5
 
+    # --------------------------------
+    # 8. Weather compatibility
+    # --------------------------------
+    if weather:
+        w_lower = weather.lower()
+        top_cat = (top.category or "").lower()
+        bottom_cat = (bottom.category or "").lower()
+        top_fit = (top.fit or "").lower()
+
+        if w_lower == "warm":
+            # Prefer lightweight tops (t-shirts, casual tops), relaxed/regular fit
+            if top_cat in ["tshirt", "t-shirt", "top"]:
+                score += 15
+            elif top_cat == "shirt" and top_fit in ["relaxed", "oversized"]:
+                score += 10
+            if bottom_cat in ["shorts", "pants", "chinos"]:
+                score += 5
+
+        elif w_lower == "cold":
+            # Prefer layered/structured tops (shirts, jackets, hoodies) & sturdy bottoms
+            if top_cat in ["shirt", "jacket", "hoodie", "sweater", "blazer"]:
+                score += 15
+            elif top_cat in ["tshirt", "t-shirt"]:
+                score += 5
+            if bottom_cat in ["jeans", "pants", "trousers"]:
+                score += 10
+
+        elif w_lower == "cool":
+            # Versatile transitional pieces
+            if top_cat in ["shirt", "polo", "tshirt", "t-shirt"]:
+                score += 10
+            if bottom_cat in ["jeans", "pants", "trousers", "chinos"]:
+                score += 10
+
     return min(score, 100)
 
 
@@ -172,7 +207,8 @@ def generate_outfits(
     wardrobe,
     profile,
     occasion,
-    style_vibe=None
+    style_vibe=None,
+    weather=None
 ):
     tops = [
         item
@@ -208,7 +244,8 @@ def generate_outfits(
             shoe,
             profile,
             occasion,
-            style_vibe
+            style_vibe,
+            weather
         )
 
         outfits.append({
