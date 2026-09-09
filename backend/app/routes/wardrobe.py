@@ -1,6 +1,7 @@
 import uuid
 from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -113,6 +114,60 @@ async def analyze_clothing_image(
     )
 
     return analysis
+
+
+class AnalyzeUrlRequest(BaseModel):
+    url: str
+
+
+@router.post("/analyze-url")
+def analyze_clothing_url(
+    req: AnalyzeUrlRequest,
+    current_user: User = Depends(get_current_user),
+):
+    url = req.url.strip()
+    if not (url.startswith("http://") or url.startswith("https://")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="URL must start with http:// or https://"
+        )
+
+    try:
+        import requests
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+        }
+        resp = requests.get(url, headers=headers, timeout=15)
+        if resp.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Could not load image from URL (HTTP {resp.status_code})"
+            )
+
+        content = resp.content
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Image size exceeds 10MB limit"
+            )
+
+        content_type = resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
+        filename = Path(url.split("?")[0]).name or "garment.jpg"
+
+        analysis = analyze_garment_image(
+            image_bytes=content,
+            filename=filename,
+            mime_type=content_type
+        )
+        return analysis
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to analyze image from URL: {str(exc)}"
+        )
 
 
 @router.post(

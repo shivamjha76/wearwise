@@ -161,7 +161,6 @@ export default function WardrobePage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   // Auto-dismiss toast notifications
   useEffect(() => {
@@ -245,6 +244,55 @@ export default function WardrobePage() {
     setFile(null);
     setPreviewUrl(null);
     setAiDetectedInfo(null);
+  };
+
+  const analyzeUrl = async (urlToAnalyze: string) => {
+    const trimmed = urlToAnalyze.trim();
+    if (!trimmed || (!trimmed.startsWith("http://") && !trimmed.startsWith("https://"))) {
+      return;
+    }
+
+    setAnalyzingImage(true);
+    setAiDetectedInfo(null);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("wearwise_token") : null;
+      const res = await fetch(`${API_BASE_URL}/wardrobe/analyze-url`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ url: trimmed }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setForm((prev) => ({
+          ...prev,
+          category: data.category || prev.category,
+          color: data.color || prev.color,
+          fit: data.fit || prev.fit,
+          pattern: data.pattern || prev.pattern,
+          style: data.style || prev.style,
+        }));
+        setAiDetectedInfo({
+          description: data.description,
+          category: data.category,
+          color: data.color,
+          fit: data.fit,
+          confidence: data.confidence,
+          engine: data.engine,
+        });
+        setNotification({
+          type: "success",
+          message: `✨ AI detected: ${data.color} ${data.category}`,
+        });
+      }
+    } catch (err) {
+      console.error("URL analysis error:", err);
+    } finally {
+      setAnalyzingImage(false);
+    }
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -356,20 +404,35 @@ export default function WardrobePage() {
         }
         finalImageUrl = trimmedUrl;
 
-        // Intelligent deduction from URL string
-        const urlLower = trimmedUrl.toLowerCase();
-        if (urlLower.includes("shirt") && !urlLower.includes("t-shirt") && !urlLower.includes("tshirt")) finalCategory = "shirt";
-        else if (urlLower.includes("jean")) finalCategory = "jeans";
-        else if (urlLower.includes("pant") || urlLower.includes("trouser") || urlLower.includes("chino")) finalCategory = "pants";
-        else if (urlLower.includes("sneaker")) finalCategory = "sneakers";
-        else if (urlLower.includes("shoe") || urlLower.includes("boot") || urlLower.includes("loafer")) finalCategory = "shoes";
-        else if (urlLower.includes("tshirt") || urlLower.includes("tee")) finalCategory = "tshirt";
-
-        for (const c of ["white", "black", "grey", "beige", "blue", "green", "olive", "brown", "maroon"]) {
-          if (urlLower.includes(c)) {
-            finalColor = c;
-            break;
+        // If not already analyzed, analyze via backend AI now
+        if (!aiDetectedInfo) {
+          try {
+            const token = typeof window !== "undefined" ? localStorage.getItem("wearwise_token") : null;
+            const analyzeRes = await fetch(`${API_BASE_URL}/wardrobe/analyze-url`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+              body: JSON.stringify({ url: trimmedUrl }),
+            });
+            if (analyzeRes.ok) {
+              const data = await analyzeRes.json();
+              if (data.category) finalCategory = data.category;
+              if (data.color) finalColor = data.color;
+              if (data.fit) finalFit = data.fit;
+              if (data.pattern) finalPattern = data.pattern;
+              if (data.style) finalStyle = data.style;
+            }
+          } catch (e) {
+            console.warn("Direct URL analyze during add failed, using form values:", e);
           }
+        } else {
+          finalCategory = aiDetectedInfo.category || form.category || "tshirt";
+          finalColor = aiDetectedInfo.color || form.color || "white";
+          finalFit = aiDetectedInfo.fit || form.fit || "regular";
+          finalPattern = form.pattern || "solid";
+          finalStyle = form.style || "casual";
         }
       }
 
@@ -649,43 +712,10 @@ export default function WardrobePage() {
                         </p>
                       </div>
 
-                      {/* Direct Action Buttons: Camera Click vs Choose File */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => cameraInputRef.current?.click()}
-                          className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-[#fbfbf9] py-2.5 text-xs font-semibold text-gray-800 hover:bg-white hover:border-gray-400 transition cursor-pointer active:scale-98"
-                        >
-                          <span>📷</span>
-                          <span>Click Photo</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-[#fbfbf9] py-2.5 text-xs font-semibold text-gray-800 hover:bg-white hover:border-gray-400 transition cursor-pointer active:scale-98"
-                        >
-                          <span>📁</span>
-                          <span>Upload File</span>
-                        </button>
-                      </div>
-
                       <input
                         ref={fileInputRef}
                         type="file"
                         accept="image/*"
-                        onChange={(e) => {
-                          if (e.target.files?.[0]) {
-                            handleFileSelect(e.target.files[0]);
-                          }
-                        }}
-                        className="hidden"
-                      />
-                      <input
-                        ref={cameraInputRef}
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
                         onChange={(e) => {
                           if (e.target.files?.[0]) {
                             handleFileSelect(e.target.files[0]);
@@ -700,18 +730,83 @@ export default function WardrobePage() {
                 /* Mode: URL */
                 <div className="space-y-3">
                   <div>
-                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700">
-                      Garment Image URL
-                    </label>
-                    <input
-                      name="image_url"
-                      type="url"
-                      placeholder="https://example.com/item.jpg"
-                      value={form.image_url}
-                      onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-                      className="w-full rounded-xl border border-[#e2e4e7] bg-[#fbfbf9] p-3 text-xs font-medium text-gray-900 placeholder:text-gray-400 outline-none focus:border-black"
-                    />
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-gray-700">
+                        Garment Image URL
+                      </label>
+                      {form.image_url.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => analyzeUrl(form.image_url)}
+                          disabled={analyzingImage}
+                          className="text-[11px] font-bold text-black underline hover:text-gray-700 cursor-pointer disabled:opacity-50"
+                        >
+                          {analyzingImage ? "Scanning..." : "✨ Scan with AI"}
+                        </button>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <input
+                        name="image_url"
+                        type="url"
+                        placeholder="https://example.com/item.jpg"
+                        value={form.image_url}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setForm((prev) => ({ ...prev, image_url: val }));
+                        }}
+                        onBlur={(e) => {
+                          if (e.target.value.trim().startsWith("http")) {
+                            analyzeUrl(e.target.value);
+                          }
+                        }}
+                        className="w-full rounded-xl border border-[#e2e4e7] bg-[#fbfbf9] p-3 pr-10 text-xs font-medium text-gray-900 placeholder:text-gray-400 outline-none focus:border-black"
+                      />
+                      {form.image_url && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForm((prev) => ({ ...prev, image_url: "" }));
+                            setAiDetectedInfo(null);
+                          }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-black"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
                   </div>
+
+                  {/* AI Scanning Status for URL */}
+                  {analyzingImage && (
+                    <div className="flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900 animate-pulse">
+                      <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-amber-700 border-t-transparent" />
+                      <span className="font-semibold">✨ AI scanning garment features from URL...</span>
+                    </div>
+                  )}
+
+                  {aiDetectedInfo && !analyzingImage && (
+                    <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-2.5 text-xs text-emerald-950 animate-pop-in">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span>✨</span>
+                          <span className="font-bold">
+                            Auto-detected: <span className="capitalize">{aiDetectedInfo.color} {aiDetectedInfo.category}</span>
+                          </span>
+                        </div>
+                        {aiDetectedInfo.confidence && (
+                          <span className="rounded-full bg-emerald-200/80 px-1.5 py-0.2 text-[9px] font-bold text-emerald-900">
+                            {Math.round(aiDetectedInfo.confidence * 100)}%
+                          </span>
+                        )}
+                      </div>
+                      {aiDetectedInfo.fit && (
+                        <p className="mt-1 text-[11px] text-emerald-800">
+                          Fit: <span className="capitalize font-semibold">{aiDetectedInfo.fit}</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {form.image_url.trim() && (
                     <div className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl border border-gray-200 bg-[#f7f7f5] p-2 flex items-center justify-center">
@@ -719,6 +814,11 @@ export default function WardrobePage() {
                         src={form.image_url}
                         alt="URL preview"
                         className="h-full w-full object-contain"
+                        onLoad={() => {
+                          if (!aiDetectedInfo && !analyzingImage) {
+                            analyzeUrl(form.image_url);
+                          }
+                        }}
                         onError={(e) => {
                           (e.currentTarget as HTMLElement).style.display = "none";
                         }}
@@ -932,9 +1032,6 @@ export default function WardrobePage() {
                   <h4 className="text-sm font-bold text-gray-900">
                     Ready to generate styled looks?
                   </h4>
-                  <p className="text-xs text-gray-500">
-                    Our AI will combine your {items.length} items for college, work, dates, and parties.
-                  </p>
                 </div>
                 <Link
                   href="/style"

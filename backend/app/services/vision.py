@@ -92,11 +92,15 @@ def _pillow_heuristic_analyze(image_bytes: bytes, filename: str) -> dict:
             img = img.convert("RGB")
             width, height = img.size
 
-            # Aspect ratio deduction only if exceptionally tall (e.g. full-length jeans)
-            if category == "tshirt":
-                aspect = height / max(width, 1)
-                if aspect > 1.8:
+            aspect = height / max(width, 1)
+            has_explicit_hint = any(k in fname_lower for k in ["sneaker", "shoe", "boot", "loafer", "pant", "trouser", "chino", "jogger", "jean", "denim", "shirt", "polo", "button", "tshirt", "tee"])
+            if not has_explicit_hint:
+                if aspect > 1.55:
                     category = "jeans"
+                elif aspect < 0.72:
+                    category = "sneakers"
+                else:
+                    category = "tshirt"
 
             # Center crop (middle 60%) to ignore background border/surface
             left = int(width * 0.2)
@@ -153,7 +157,7 @@ def _pillow_heuristic_analyze(image_bytes: bytes, filename: str) -> dict:
 def _call_gemini_vision(image_bytes: bytes, mime_type: str = "image/jpeg") -> Optional[dict]:
     """Calls Google Gemini Vision (Multimodal AI) using configured GEMINI_API_KEY."""
     gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
-    if not gemini_key or gemini_key.startswith("your_") or len(gemini_key) < 15 or not httpx:
+    if not gemini_key or gemini_key.startswith("your_") or len(gemini_key) < 15:
         return None
 
     b64_data = base64.b64encode(image_bytes).decode("utf-8")
@@ -214,8 +218,12 @@ def _call_gemini_vision(image_bytes: bytes, mime_type: str = "image/jpeg") -> Op
     for model in models_to_try:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={gemini_key}"
         try:
-            with httpx.Client(trust_env=False, timeout=30.0) as client:
-                res = client.post(url, json=payload)
+            if httpx:
+                with httpx.Client(trust_env=False, timeout=30.0) as client:
+                    res = client.post(url, json=payload)
+            else:
+                import requests
+                res = requests.post(url, json=payload, timeout=30.0)
                 if res.status_code == 200:
                     data = res.json()
                     candidates = data.get("candidates", [])
