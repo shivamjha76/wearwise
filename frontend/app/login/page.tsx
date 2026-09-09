@@ -30,9 +30,19 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
+      let data: { detail?: string; access_token?: string; user?: any } = {};
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        throw new Error(
+          response.status === 404
+            ? "Backend API not reachable (404). Please deploy the backend and set NEXT_PUBLIC_API_URL in Vercel settings."
+            : `Server returned status ${response.status}. Please check backend logs.`
+        );
+      }
 
-      if (!response.ok) {
+      if (!response.ok || !data.access_token || !data.user) {
         throw new Error(data.detail || "Invalid email or password");
       }
 
