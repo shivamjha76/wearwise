@@ -277,22 +277,6 @@ export default function WardrobePage() {
                             <div>
                                 <label className="mb-2 block text-sm font-medium text-gray-900">
                                     Image URL
-                                </label>
-
-                                <input
-                                    type="text"
-                                    value={form.image_url}
-                                    onChange={(e) =>
-                                        setForm({ ...form, image_url: e.target.value })
-                                    }
-                                    placeholder="https://example.com/shirt.jpg"
-                                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-900 outline-none focus:border-black"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="mb-2 block text-sm font-medium text-gray-900">
-                                    Image URL
                                     <span className="ml-1 font-normal text-gray-500">
                                         (Optional)
                                     </span>

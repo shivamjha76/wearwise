@@ -56,7 +56,7 @@ export default function OutfitPage() {
         const fetchWardrobe = async () => {
             try {
                 const response = await fetch(
-                    `http://127.0.0.1:8000/wardrobe/${userId}/next-purchase`
+                    `http://127.0.0.1:8000/wardrobe/${userId}`
                 );
 
                 if (!response.ok) {
@@ -228,9 +228,21 @@ function ClothingCard({
 
     return (
         <div className="rounded-2xl bg-white p-6 text-center shadow">
-            <div className="text-6xl">{emoji}</div>
+            <div className="mb-4 overflow-hidden rounded-xl bg-gray-100">
+                {item.image_url ? (
+                    <img
+                        src={item.image_url}
+                        alt={`${item.color} ${item.category}`}
+                        className="h-56 w-full object-cover"
+                    />
+                ) : (
+                    <div className="flex h-56 items-center justify-center text-6xl">
+                        {emoji}
+                    </div>
+                )}
+            </div>
 
-            <p className="mt-5 text-sm uppercase tracking-wider text-gray-400">
+            <p className="text-sm uppercase tracking-wider text-gray-400">
                 {title}
             </p>
 

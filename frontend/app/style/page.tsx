@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type WardrobeItem = {
@@ -182,6 +182,12 @@ export default function StylePage() {
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+
+    useEffect(() => {
+        if (!localStorage.getItem("wearwise_user_id")) {
+            router.push("/profile");
+        }
+    }, [router]);
 
     const generateOutfit = async () => {
         const userId = localStorage.getItem("wearwise_user_id");
