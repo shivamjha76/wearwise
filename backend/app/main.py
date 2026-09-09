@@ -19,9 +19,16 @@ from app.routes.weather import router as weather_router
 
 
 def init_db():
-    """Auto-create tables on launch or on-demand."""
+    """Auto-create tables on launch or on-demand and migrate columns."""
     try:
         Base.metadata.create_all(bind=engine)
+        from sqlalchemy import inspect, text
+        with engine.begin() as conn:
+            inspector = inspect(conn)
+            if "users" in inspector.get_table_names():
+                cols = [c["name"] for c in inspector.get_columns("users")]
+                if "avatar_url" not in cols:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500)"))
     except Exception as e:
         print(f"Warning: Database metadata initialization error: {e}")
 

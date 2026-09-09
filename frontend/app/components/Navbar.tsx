@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { clearSession, getStoredUser, User } from "@/lib/auth";
+import { getImageUrl } from "@/lib/api";
 
 export default function Navbar() {
   const router = useRouter();
@@ -115,10 +116,27 @@ export default function Navbar() {
                 Profile
               </Link>
 
-              <div className="ml-2 flex items-center gap-2 border-l border-gray-200 pl-3">
-                <span className="hidden text-xs font-semibold text-gray-600 md:inline-block">
-                  {user.name}
-                </span>
+              <div className="ml-2 flex items-center gap-2.5 border-l border-gray-200 pl-3">
+                <Link
+                  href="/profile"
+                  className="flex items-center gap-2 group transition"
+                  title="Your Profile"
+                >
+                  <div className="h-7 w-7 overflow-hidden rounded-full border border-gray-300 bg-neutral-800 text-white flex items-center justify-center text-xs font-bold uppercase select-none shadow-2xs">
+                    {user.avatar_url ? (
+                      <img
+                        src={getImageUrl(user.avatar_url) || user.avatar_url}
+                        alt={user.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span>{user.name ? user.name.charAt(0) : "👤"}</span>
+                    )}
+                  </div>
+                  <span className="hidden text-xs font-semibold text-gray-700 group-hover:text-black md:inline-block">
+                    {user.name}
+                  </span>
+                </Link>
 
                 <button
                   onClick={handleLogout}

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { API_BASE_URL } from "@/lib/api";
-import { getStoredUser, getAuthHeaders } from "@/lib/auth";
+import { API_BASE_URL, getImageUrl } from "@/lib/api";
+import { getStoredUser, getAuthHeaders, setSession, getStoredToken, User } from "@/lib/auth";
 
 const SKIN_TONES = [
   { value: "fair", label: "Fair", hex: "#fae2d6" },
@@ -36,6 +36,11 @@ export default function ProfilePage() {
     budget: "",
   });
 
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [fetchingProfile, setFetchingProfile] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -53,6 +58,8 @@ export default function ProfilePage() {
       return;
     }
 
+    setCurrentUser(user);
+    setAvatarUrl(user.avatar_url || null);
     setForm((prev) => ({
       ...prev,
       name: user.name,
@@ -61,6 +68,27 @@ export default function ProfilePage() {
 
     const loadProfile = async () => {
       try {
+        const token = getStoredToken();
+
+        // 1. Fetch latest user details including avatar
+        const userRes = await fetch(`${API_BASE_URL}/users/me`, {
+          headers: getAuthHeaders(),
+        });
+        if (userRes.ok) {
+          const freshUser: User = await userRes.json();
+          setCurrentUser(freshUser);
+          setAvatarUrl(freshUser.avatar_url || null);
+          setForm((prev) => ({
+            ...prev,
+            name: freshUser.name || prev.name,
+            email: freshUser.email || prev.email,
+          }));
+          if (token) {
+            setSession(token, freshUser);
+          }
+        }
+
+        // 2. Fetch style profile
         const res = await fetch(`${API_BASE_URL}/users/${user.id}/style-profile`, {
           headers: getAuthHeaders(),
         });
@@ -85,6 +113,92 @@ export default function ProfilePage() {
 
     loadProfile();
   }, [router]);
+
+  const handleAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setToastMessage("Image size must be under 5MB");
+      return;
+    }
+
+    const validTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg", "image/gif"];
+    if (!validTypes.includes(file.type)) {
+      setToastMessage("Please upload a JPG, PNG, or WebP image");
+      return;
+    }
+
+    // Instant local preview
+    const previewUrl = URL.createObjectURL(file);
+    setAvatarUrl(previewUrl);
+
+    setUploadingAvatar(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const token = getStoredToken();
+      const res = await fetch(`${API_BASE_URL}/users/profile-picture`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "Failed to upload profile picture");
+      }
+
+      const updatedUser: User = await res.json();
+      setCurrentUser(updatedUser);
+      setAvatarUrl(updatedUser.avatar_url || null);
+      if (token) {
+        setSession(token, updatedUser);
+      }
+      setToastMessage("Profile picture updated! ✨");
+    } catch (err: unknown) {
+      console.error(err);
+      const msg = err instanceof Error ? err.message : "Failed to upload photo";
+      setToastMessage(msg);
+      setAvatarUrl(currentUser?.avatar_url || null);
+    } finally {
+      setUploadingAvatar(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!avatarUrl || uploadingAvatar) return;
+
+    setUploadingAvatar(true);
+    try {
+      const token = getStoredToken();
+      const res = await fetch(`${API_BASE_URL}/users/profile-picture`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to remove profile picture");
+      }
+
+      const updatedUser: User = await res.json();
+      setCurrentUser(updatedUser);
+      setAvatarUrl(null);
+      if (token) {
+        setSession(token, updatedUser);
+      }
+      setToastMessage("Profile picture removed.");
+    } catch (err: unknown) {
+      console.error(err);
+      setToastMessage("Could not remove profile picture.");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm({
@@ -208,7 +322,84 @@ export default function ProfilePage() {
               1. Member Identity
             </h2>
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            {/* Profile Avatar Card */}
+            <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center gap-5 p-4 sm:p-5 rounded-2xl border border-[#ebece8] bg-[#fafaf8]">
+              <div className="relative group">
+                <div className="relative h-20 w-20 sm:h-24 sm:w-24 overflow-hidden rounded-full border-2 border-white shadow-md bg-gradient-to-br from-neutral-800 to-neutral-950 flex items-center justify-center text-white text-2xl sm:text-3xl font-bold uppercase select-none">
+                  {avatarUrl ? (
+                    <img
+                      src={getImageUrl(avatarUrl) || avatarUrl}
+                      alt={form.name || "Profile Photo"}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span>{form.name ? form.name.charAt(0) : "👤"}</span>
+                  )}
+                  {uploadingAvatar && (
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center">
+                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Camera icon button */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingAvatar}
+                  className="absolute bottom-0 right-0 h-8 w-8 rounded-full bg-black text-white flex items-center justify-center shadow-md hover:bg-neutral-800 transition active:scale-90 disabled:opacity-50 text-xs"
+                  title="Upload profile photo"
+                >
+                  📷
+                </button>
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-gray-900">Profile Photo</h3>
+                  {uploadingAvatar && (
+                    <span className="text-[11px] font-semibold text-emerald-600 animate-pulse">
+                      Uploading...
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Upload a portrait picture (JPG, PNG or WebP, up to 5MB).
+                </p>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={handleAvatarSelect}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingAvatar}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3.5 py-2 text-xs font-semibold text-gray-800 shadow-2xs hover:bg-gray-50 active:scale-95 transition disabled:opacity-50"
+                  >
+                    <span>{avatarUrl ? "Change Photo" : "Upload Photo"}</span>
+                  </button>
+
+                  {avatarUrl && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveAvatar}
+                      disabled={uploadingAvatar}
+                      className="inline-flex items-center gap-1 rounded-xl border border-red-200 bg-red-50/70 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-100/80 transition active:scale-95 disabled:opacity-50"
+                    >
+                      <span>Remove</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700">
                   Full Name
