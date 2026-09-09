@@ -23,16 +23,41 @@ type ChatMessage = {
   content: string;
   recommended_items?: WardrobeItem[];
   occasion?: string | null;
+  engine?: string | null;
   timestamp: string;
 };
 
-const QUICK_PROMPTS = [
-  "What should I wear to a dinner date?",
-  "I have an interview, help me dress sharp and professional.",
-  "Give me an effortless casual campus look.",
-  "What's a stylish outfit for a weekend party?",
-  "How should I style my sneakers with what I have?",
-];
+type EngineInfo = {
+  engine: string;
+  label: string;
+  online: boolean;
+};
+
+
+
+
+const COLOR_MAP: Record<string, string> = {
+  white: "#ffffff",
+  black: "#171717",
+  grey: "#71717a",
+  beige: "#d4c5a9",
+  blue: "#2563eb",
+  green: "#16a34a",
+  olive: "#556b2f",
+  brown: "#78350f",
+  maroon: "#881337",
+};
+
+function getItemRole(category: string): "Top" | "Bottom" | "Footwear" {
+  const value = category.toLowerCase();
+  if (value === "jeans" || value === "pants" || value === "trousers" || value === "bottom") {
+    return "Bottom";
+  }
+  if (value === "shoes" || value === "sneakers" || value === "loafers" || value === "boots") {
+    return "Footwear";
+  }
+  return "Top";
+}
 
 export default function StylistPage() {
   const router = useRouter();
@@ -43,11 +68,18 @@ export default function StylistPage() {
   const [wardrobeCount, setWardrobeCount] = useState<number | null>(null);
   const [savingOutfitId, setSavingOutfitId] = useState<string | null>(null);
   const [savedSuccessId, setSavedSuccessId] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [engineInfo, setEngineInfo] = useState<EngineInfo | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [selectedProvider, setSelectedProvider] = useState<"gemini" | "openai">("gemini");
+  const [savingKey, setSavingKey] = useState(false);
+
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto scroll to bottom of chat
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -55,6 +87,12 @@ export default function StylistPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, loading]);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const t = setTimeout(() => setToastMessage(null), 3500);
+    return () => clearTimeout(t);
+  }, [toastMessage]);
 
   useEffect(() => {
     const user = getStoredUser();
@@ -69,12 +107,12 @@ export default function StylistPage() {
       {
         id: "welcome",
         role: "assistant",
-        content: `Hi **${user.name}**! 👋 I'm your **WearWise Personal Stylist**.\n\nI have real-time access to your wardrobe and style preferences. Ask me for outfit recommendations for any occasion, advice on pairing colors, or how to wear a specific item from your closet.`,
+        content: `Hello **${user.name}**! 👋 I am your **WearWise Personal Stylist**.\n\nI'm powered with real-time access to your digital closet and style preferences. You can chat with me just like ChatGPT or Gemini!\n\nAsk me for:\n• *Outfit recommendations for dates, interviews, or parties*\n• *What colors look best together*\n• *How to style specific pieces from your closet*\n• *General fashion tips, rules, and grooming advice*`,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       },
     ]);
 
-    // Fetch wardrobe count to provide contextual alerts
+    // Fetch wardrobe count for context
     const fetchWardrobeCount = async () => {
       try {
         const res = await fetch(`${API_BASE_URL}/wardrobe/${user.id}`, {
@@ -89,8 +127,94 @@ export default function StylistPage() {
       }
     };
 
+    // Fetch active AI engine status
+    const fetchEngineStatus = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/stylist/status`, {
+          headers: getAuthHeaders(),
+        });
+        if (res.ok) {
+          const data: EngineInfo = await res.json();
+          setEngineInfo(data);
+        }
+      } catch (err) {
+        console.error("Could not fetch stylist engine status:", err);
+      }
+    };
+
     fetchWardrobeCount();
+    fetchEngineStatus();
   }, [router]);
+
+  const resetChat = () => {
+    if (!currentUser) return;
+    setMessages([
+      {
+        id: `welcome-${Date.now()}`,
+        role: "assistant",
+        content: `Hello **${currentUser.name}**! 👋 Ready for a fresh styling session.\n\nAsk me for outfit formulas, color harmony advice, or what to wear today!`,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      },
+    ]);
+    setToastMessage("Started a fresh styling conversation!");
+  };
+
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setToastMessage("Advice copied to clipboard!");
+    setTimeout(() => setCopiedId(null), 2500);
+  };
+
+  const handleSaveApiKey = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const key = apiKeyInput.trim();
+    if (!key) return;
+
+    setSavingKey(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/stylist/api-key`, {
+        method: "POST",
+        headers: {
+          ...getAuthHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          provider: selectedProvider,
+          api_key: key,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to activate API Key");
+      }
+
+      const updatedInfo: EngineInfo = await res.json();
+      setEngineInfo(updatedInfo);
+      setShowKeyModal(false);
+      setApiKeyInput("");
+      setToastMessage(`Connected successfully to ${updatedInfo.label}!`);
+
+      // Add assistant confirmation message
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `engine-activated-${Date.now()}`,
+          role: "assistant",
+          content: `🎉 **${updatedInfo.label} is now active!**\n\nI am now directly connected to Google Gemini / ChatGPT. You can talk with me freely about literally **anything** — whether it's fashion, outfit ideas, general questions, stories, or chit-chat. What's on your mind?`,
+          engine: updatedInfo.engine,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        },
+      ]);
+    } catch (err: unknown) {
+      console.error(err);
+      setToastMessage(err instanceof Error ? err.message : "Failed to connect API Key.");
+    } finally {
+      setSavingKey(false);
+    }
+  };
+
 
   const sendMessage = async (textToSend?: string) => {
     const messageContent = (textToSend || input).trim();
@@ -110,10 +234,9 @@ export default function StylistPage() {
     setLoading(true);
 
     try {
-      // Build history payload (last 6 messages, exclude welcome message id)
       const historyPayload = updatedMessages
-        .filter((m) => m.id !== "welcome")
-        .slice(-6)
+        .filter((m) => m.id !== "welcome" && !m.id.startsWith("welcome-"))
+        .slice(-8)
         .map((m) => ({
           role: m.role,
           content: m.content,
@@ -124,7 +247,7 @@ export default function StylistPage() {
         headers: getAuthHeaders(),
         body: JSON.stringify({
           message: messageContent,
-          history: historyPayload.slice(0, -1), // previous history excluding the current message
+          history: historyPayload.slice(0, -1),
         }),
       });
 
@@ -138,9 +261,10 @@ export default function StylistPage() {
       const assistantMessage: ChatMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
-        content: data.reply || "Here is what I recommend for your look.",
+        content: data.reply || "Here is my tailored recommendation for your look.",
         recommended_items: data.recommended_items || [],
         occasion: data.occasion || null,
+        engine: data.engine || null,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
 
@@ -163,14 +287,14 @@ export default function StylistPage() {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
   };
 
-  // Helper to save a complete 3-piece look directly to Lookbook
+
   const saveRecommendedLook = async (
     items: WardrobeItem[],
     occasion: string | null | undefined,
@@ -193,7 +317,7 @@ export default function StylistPage() {
     );
 
     if (!top || !bottom || !shoes) {
-      alert("A complete look requires a top, bottom, and footwear to save to your Lookbook.");
+      setToastMessage("A complete look requires a top, bottom, and footwear.");
       return;
     }
 
@@ -216,72 +340,71 @@ export default function StylistPage() {
       if (!res.ok) throw new Error("Could not save outfit to lookbook");
 
       setSavedSuccessId(messageId);
+      setToastMessage("Outfit successfully saved to your Lookbook!");
       setTimeout(() => setSavedSuccessId(null), 4000);
     } catch (err) {
       console.error(err);
-      alert("Failed to save outfit to Lookbook. Please try again.");
+      setToastMessage("Failed to save outfit to Lookbook.");
     } finally {
       setSavingOutfitId(null);
     }
   };
 
   return (
-    <main className="flex min-h-[calc(100vh-65px)] flex-col bg-[#f7f7f5]">
-      {/* Top Banner / Header */}
-      <div className="border-b border-gray-200 bg-white px-5 py-4 sm:px-8">
-        <div className="mx-auto flex max-w-5xl items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-black text-xl text-white shadow-sm">
-              ✨
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold tracking-tight text-gray-950 sm:text-xl">
-                  WearWise Stylist
-                </h1>
-                <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-emerald-700 border border-emerald-200">
-                  Online
-                </span>
-              </div>
-              <p className="text-xs text-gray-500">
-                Personalized advice tailored to your closet and profile
-              </p>
-            </div>
-          </div>
+    <main className="relative flex min-h-[calc(100vh-65px)] flex-col overflow-hidden bg-[#f4f0ea] text-[#171513]">
+      {/* Ambient warm background glow */}
+      <div className="pointer-events-none absolute -top-40 left-1/2 -z-10 h-[500px] w-[900px] -translate-x-1/2 rounded-full bg-gradient-to-b from-[#e7ded1]/70 via-[#f5efe6]/40 to-transparent blur-3xl" />
 
-          <div className="flex items-center gap-3">
-            {wardrobeCount !== null && (
-              <Link
-                href="/wardrobe"
-                className="hidden rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 sm:inline-flex items-center gap-1.5"
-              >
-                <span>👕 {wardrobeCount} pieces in closet</span>
-              </Link>
-            )}
-            <Link
-              href="/saved"
-              className="rounded-xl border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50 hover:text-black"
-            >
-              Saved Looks →
-            </Link>
+      {/* Floating Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-20 right-6 z-50 animate-pop-in">
+          <div className="flex items-center gap-2 rounded-2xl border border-black/10 bg-[#171717] px-4 py-2.5 text-xs font-semibold text-white shadow-lg backdrop-blur-md">
+            <span>✦</span>
+            <span>{toastMessage}</span>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* ================= TOP HEADER ================= */}
+      <header className="sticky top-0 z-30 border-b border-[#e5dfd5] bg-[#f4f0ea]/95 px-5 py-3.5 backdrop-blur-md sm:px-8">
+        <div className="mx-auto flex max-w-5xl items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#171717] text-base text-white shadow-2xs">
+              ✦
+            </div>
+            <h1 className="text-base font-extrabold tracking-tight text-[#1a1714] sm:text-lg">
+              WearWise Stylist
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={resetChat}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[#ded5c6] bg-white px-3.5 py-1.5 text-xs font-semibold text-[#524a3e] shadow-2xs transition hover:border-black/30 hover:bg-[#faf7f2] hover:text-black cursor-pointer"
+              title="Start a fresh styling conversation"
+            >
+              <span>+</span>
+              <span>New Chat</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
 
       {/* Wardrobe Reminder Alert if Empty */}
       {wardrobeCount === 0 && (
         <div className="mx-auto mt-4 max-w-5xl px-4 sm:px-6 w-full">
-          <div className="flex items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 shadow-sm">
+          <div className="flex items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-[#fffaf0] p-3.5 text-xs text-amber-900 shadow-2xs">
             <div className="flex items-center gap-2.5">
-              <span className="text-lg">💡</span>
+              <span className="text-base">💡</span>
               <span>
-                Your wardrobe is currently empty! Add a few tops, bottoms, and shoes in your{" "}
-                <strong>Wardrobe</strong> so I can recommend your actual clothes.
+                Your closet is currently empty. Add clothes in your <strong>Wardrobe Vault</strong> so I can craft looks using your real clothes.
               </span>
             </div>
             <Link
               href="/wardrobe"
-              className="shrink-0 rounded-lg bg-amber-900 px-3 py-1.5 font-semibold text-white transition hover:bg-amber-950"
+              className="shrink-0 rounded-xl bg-amber-900 px-3 py-1.5 font-bold text-white transition hover:bg-amber-950"
             >
               + Add Clothes
             </Link>
@@ -289,7 +412,7 @@ export default function StylistPage() {
         </div>
       )}
 
-      {/* Chat Messages Area */}
+      {/* ================= CHAT STREAM ================= */}
       <div className="mx-auto flex-1 w-full max-w-5xl px-4 py-6 sm:px-6">
         <div className="space-y-6">
           {messages.map((message) => {
@@ -297,44 +420,74 @@ export default function StylistPage() {
             return (
               <div
                 key={message.id}
-                className={`flex gap-3.5 ${isUser ? "justify-end" : "justify-start"}`}
+                className={`flex gap-3.5 animate-pop-in ${isUser ? "justify-end" : "justify-start"}`}
               >
                 {!isUser && (
-                  <div className="flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-2xl bg-black text-sm text-white shadow-sm mt-0.5">
+                  <div className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-xl bg-[#171717] text-xs text-white shadow-2xs mt-0.5">
                     ✦
                   </div>
                 )}
 
-                <div className={`max-w-[88%] sm:max-w-[78%] ${isUser ? "items-end" : "items-start"}`}>
-                  {/* Occasion pill if present */}
-                  {!isUser && message.occasion && (
-                    <div className="mb-1.5 flex items-center gap-2">
-                      <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-gray-700 border border-gray-200">
-                        {message.occasion} Vibe
-                      </span>
+                <div className={`max-w-[92%] sm:max-w-[80%] ${isUser ? "items-end" : "items-start"}`}>
+                  
+                  {/* Top Bar for Assistant Bubble */}
+                  {!isUser && (
+                    <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
+                      <div className="flex items-center gap-2">
+                        {message.occasion && (
+                          <span className="rounded-full bg-black/5 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-700 border border-black/10">
+                            {message.occasion} Vibe
+                          </span>
+                        )}
+                        {message.engine && (
+                          <span className="text-[10px] font-medium text-gray-400 capitalize">
+                            ✦ {message.engine === "gemini" ? "Gemini" : message.engine === "openai" ? "OpenAI" : "AI Stylist"}
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(message.content, message.id)}
+                        className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-gray-400 hover:text-gray-900 hover:bg-black/5 transition cursor-pointer"
+                        title="Copy message text"
+                      >
+                        {copiedId === message.id ? (
+                          <>
+                            <span className="text-emerald-600">✓</span>
+                            <span className="text-emerald-600 font-semibold">Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>📋</span>
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   )}
 
-                  {/* Message bubble */}
+                  {/* Message Bubble */}
                   <div
-                    className={`rounded-3xl px-5 py-4 shadow-sm text-sm leading-relaxed ${
+                    className={`rounded-3xl px-5 py-4 shadow-sm text-xs sm:text-sm leading-relaxed ${
                       isUser
-                        ? "bg-black text-white rounded-tr-none"
-                        : "bg-white text-gray-900 border border-gray-200 rounded-tl-none"
+                        ? "bg-[#171717] text-white rounded-tr-none"
+                        : "bg-white text-gray-900 border border-[#e2e4e7] rounded-tl-none"
                     }`}
                   >
                     <FormattedMessage content={message.content} isUser={isUser} />
                   </div>
 
-                  {/* Recommended wardrobe pieces embedded */}
+                  {/* Recommended Garment Cards Embedded */}
                   {!isUser && message.recommended_items && message.recommended_items.length > 0 && (
-                    <div className="mt-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-                      <div className="flex items-center justify-between mb-3">
-                        <p className="text-xs font-bold uppercase tracking-wider text-gray-500">
-                          Recommended Pieces From Your Closet
+                    <div className="mt-3.5 rounded-3xl border border-[#e2e4e7] bg-white p-4 shadow-2xs">
+                      <div className="flex items-center justify-between border-b border-[#eceef0] pb-2.5 mb-3">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                          Recommended Pieces From Closet
                         </p>
                         {message.recommended_items.length >= 3 && (
                           <button
+                            type="button"
                             onClick={() =>
                               saveRecommendedLook(
                                 message.recommended_items!,
@@ -345,10 +498,10 @@ export default function StylistPage() {
                             disabled={
                               savingOutfitId === message.id || savedSuccessId === message.id
                             }
-                            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                            className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
                               savedSuccessId === message.id
                                 ? "bg-emerald-100 text-emerald-800"
-                                : "bg-black text-white hover:bg-gray-800 disabled:opacity-50"
+                                : "bg-[#171717] text-white hover:bg-black active:scale-95 disabled:opacity-50"
                             }`}
                           >
                             {savingOutfitId === message.id
@@ -360,34 +513,54 @@ export default function StylistPage() {
                         )}
                       </div>
 
+                      {/* Embedded Garment Grid with Zero-Crop Framing */}
                       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        {message.recommended_items.map((item) => (
-                          <div
-                            key={item.id}
-                            className="rounded-xl border border-gray-100 bg-[#f9f9f8] p-3 text-center transition hover:border-gray-300"
-                          >
-                            <div className="mx-auto mb-2 aspect-[4/4.5] overflow-hidden rounded-lg bg-gray-100">
-                              {item.image_url ? (
-                                <img
-                                  src={getImageUrl(item.image_url) || ""}
-                                  alt={`${item.color} ${item.category}`}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                <div className="flex h-full items-center justify-center text-3xl">
-                                  👕
+                        {message.recommended_items.map((item) => {
+                          const role = getItemRole(item.category);
+                          const hex = COLOR_MAP[item.color.toLowerCase()] || "#9ca3af";
+
+                          return (
+                            <div
+                              key={item.id}
+                              className="group rounded-2xl border border-[#e2e4e7] bg-[#fbfbf9] p-2.5 text-center transition hover:border-black/30 hover:bg-white"
+                            >
+                              <div className="relative mx-auto mb-2 aspect-[4/5] w-full overflow-hidden rounded-xl bg-[#f7f7f5] border border-[#eceef0] p-2 flex items-center justify-center">
+                                {item.image_url ? (
+                                  <img
+                                    src={getImageUrl(item.image_url) || item.image_url}
+                                    alt={`${item.color} ${item.category}`}
+                                    className="h-full w-full object-contain object-center transition duration-200 group-hover:scale-105"
+                                  />
+                                ) : (
+                                  <div className="flex h-full items-center justify-center text-3xl">
+                                    {role === "Top" ? "👕" : role === "Bottom" ? "👖" : "👟"}
+                                  </div>
+                                )}
+
+                                <div className="absolute top-1.5 left-1.5">
+                                  <span className="rounded-full bg-black/75 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-white">
+                                    {role}
+                                  </span>
                                 </div>
-                              )}
+                              </div>
+
+                              <div className="flex items-center justify-center gap-1.5">
+                                <span
+                                  className="h-2.5 w-2.5 rounded-full border border-black/10"
+                                  style={{ backgroundColor: hex }}
+                                />
+                                <p className="truncate text-xs font-bold capitalize text-gray-900">
+                                  {item.color} {item.category}
+                                </p>
+                              </div>
+
+                              <div className="mt-1 flex items-center justify-center gap-1 text-[10px] text-gray-500 capitalize">
+                                {item.fit && <span>{item.fit}</span>}
+                                {item.style && <span>· {item.style}</span>}
+                              </div>
                             </div>
-                            <p className="truncate text-xs font-bold capitalize text-gray-900">
-                              {item.color} {item.category}
-                            </p>
-                            <div className="mt-1 flex items-center justify-center gap-1 text-[11px] text-gray-500 capitalize">
-                              {item.fit && <span>{item.fit}</span>}
-                              {item.style && <span>· {item.style}</span>}
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -405,13 +578,13 @@ export default function StylistPage() {
             );
           })}
 
-          {/* Typing indicator */}
+          {/* Animated Typing Indicator */}
           {loading && (
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-black text-sm text-white shadow-sm">
+            <div className="flex items-center gap-3 animate-pop-in">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#171717] text-xs text-white shadow-2xs">
                 ✦
               </div>
-              <div className="rounded-3xl rounded-tl-none border border-gray-200 bg-white px-5 py-4 shadow-sm">
+              <div className="rounded-3xl rounded-tl-none border border-[#e2e4e7] bg-white px-5 py-3.5 shadow-sm">
                 <div className="flex items-center gap-1.5">
                   <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" />
                   <span className="h-2 w-2 rounded-full bg-gray-400 animate-bounce [animation-delay:0.15s]" />
@@ -425,94 +598,249 @@ export default function StylistPage() {
         </div>
       </div>
 
-      {/* Quick suggestions row */}
-      <div className="border-t border-gray-200 bg-white/70 backdrop-blur px-4 pt-3 pb-2 sm:px-6">
-        <div className="mx-auto max-w-5xl">
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-            <span className="text-xs font-semibold text-gray-400 shrink-0">Try asking:</span>
-            {QUICK_PROMPTS.map((prompt, idx) => (
-              <button
-                key={idx}
-                onClick={() => sendMessage(prompt)}
-                disabled={loading}
-                className="shrink-0 rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-medium text-gray-700 transition hover:border-gray-400 hover:bg-gray-50 active:scale-95 disabled:opacity-50"
-              >
-                {prompt}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Chat input box */}
-      <div className="border-t border-gray-200 bg-white px-4 py-4 sm:px-6">
+      {/* ================= FLOATING INPUT BAR ================= */}
+      <div className="border-t border-[#e5dfd5] bg-[#f4f0ea]/90 backdrop-blur-md px-4 py-3.5 sm:px-6">
         <div className="mx-auto max-w-5xl">
           <form
             onSubmit={(e) => {
               e.preventDefault();
               sendMessage();
             }}
-            className="flex items-center gap-3"
+            className="flex items-end gap-3"
           >
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask your stylist (e.g., 'What can I pair with my blue jeans?')..."
-              disabled={loading}
-              className="h-12 flex-1 rounded-2xl border border-gray-200 bg-gray-50 px-4 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-black focus:bg-white focus:ring-1 focus:ring-black"
-            />
+            <div className="relative flex-1">
+              <textarea
+                ref={inputRef}
+                rows={1}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask your stylist anything (e.g. 'hey', 'what goes with olive chinos?', 'date night outfit')..."
+                disabled={loading}
+                className="min-h-[48px] max-h-32 w-full resize-none rounded-2xl border border-[#e2dad0] bg-white px-4 py-3 text-xs sm:text-sm text-gray-900 placeholder:text-[#9e9588] outline-none transition focus:border-black focus:bg-white focus:ring-1 focus:ring-black leading-relaxed shadow-2xs"
+              />
+            </div>
             <button
               type="submit"
               disabled={!input.trim() || loading}
-              className="h-12 rounded-2xl bg-black px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl bg-[#171717] px-6 text-xs sm:text-sm font-bold text-white shadow-sm transition hover:bg-black active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer shrink-0 mb-0.5"
             >
-              Send
+              <span>Send</span>
+              <span>→</span>
             </button>
           </form>
-          <p className="mt-2 text-center text-[11px] text-gray-400">
-            WearWise Stylist provides customized advice based on the clothes in your digital closet.
-          </p>
         </div>
       </div>
+
+      {/* ================= API KEY CONNECTION MODAL ================= */}
+      {showKeyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl animate-pop-in">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl">🔑</span>
+                <div>
+                  <h2 className="text-base font-extrabold text-gray-950">Connect AI Chatbot</h2>
+                  <p className="text-[11px] text-gray-500">Enable real-time dynamic AI dialogue</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowKeyModal(false)}
+                className="rounded-full h-8 w-8 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Provider selection tabs */}
+            <div className="mt-4 flex rounded-xl bg-gray-100 p-1">
+              <button
+                type="button"
+                onClick={() => setSelectedProvider("gemini")}
+                className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition cursor-pointer ${
+                  selectedProvider === "gemini" ? "bg-white text-gray-950 shadow-xs" : "text-gray-500 hover:text-gray-950"
+                }`}
+              >
+                ✦ Google Gemini (Free)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedProvider("openai")}
+                className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition cursor-pointer ${
+                  selectedProvider === "openai" ? "bg-white text-gray-950 shadow-xs" : "text-gray-500 hover:text-gray-950"
+                }`}
+              >
+                ✦ OpenAI (ChatGPT)
+              </button>
+            </div>
+
+            {/* Instructions */}
+            {selectedProvider === "gemini" ? (
+              <div className="mt-4 rounded-2xl bg-sky-50 border border-sky-200 p-3.5 text-xs text-sky-950 space-y-2">
+                <p className="font-bold flex items-center gap-1.5">
+                  <span>✨</span>
+                  <span>How to get your FREE Gemini API Key (10s):</span>
+                </p>
+                <ol className="list-decimal list-inside text-[11px] text-sky-900 space-y-1 pl-1">
+                  <li>
+                    Open{" "}
+                    <a
+                      href="https://aistudio.google.com/app/apikey"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline font-bold text-sky-700 hover:text-sky-900"
+                    >
+                      Google AI Studio (Click here)
+                    </a>
+                  </li>
+                  <li>Sign in with your Google account & click <strong>Create API Key</strong></li>
+                  <li>
+                    Copy your key (starts with <code className="bg-sky-100 px-1 py-0.5 rounded text-[10px] font-mono">AIzaSy...</code>) and paste it below:
+                  </li>
+                </ol>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl bg-emerald-50 border border-emerald-200 p-3.5 text-xs text-emerald-950 space-y-1.5">
+                <p className="font-bold flex items-center gap-1.5">
+                  <span>⚡</span>
+                  <span>OpenAI API Key:</span>
+                </p>
+                <p className="text-[11px] text-emerald-900">
+                  Paste your OpenAI secret key from{" "}
+                  <a
+                    href="https://platform.openai.com/api-keys"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline font-bold"
+                  >
+                    platform.openai.com
+                  </a>{" "}
+                  (starts with <code className="bg-emerald-100 px-1 py-0.5 rounded text-[10px] font-mono">sk-...</code>).
+                </p>
+              </div>
+            )}
+
+            {/* Key input form */}
+            <form onSubmit={handleSaveApiKey} className="mt-4 space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  {selectedProvider === "gemini" ? "Gemini API Key" : "OpenAI API Key"}
+                </label>
+                <input
+                  type="password"
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  placeholder={selectedProvider === "gemini" ? "AIzaSy..." : "sk-..."}
+                  className="h-11 w-full rounded-xl border border-gray-200 bg-[#fbfbf9] px-3.5 text-xs font-mono text-gray-900 outline-none transition focus:border-black focus:bg-white"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowKeyModal(false)}
+                  className="flex-1 rounded-xl border border-gray-200 py-2.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!apiKeyInput.trim() || savingKey}
+                  className="flex-1 rounded-xl bg-[#171717] py-2.5 text-xs font-bold text-white hover:bg-black transition disabled:opacity-50 cursor-pointer shadow-sm"
+                >
+                  {savingKey ? "Connecting..." : "Save & Connect"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
 
+
 /**
- * Lightweight parser to format bold text (**word**), pro-tips, and line breaks cleanly
+ * Enhanced Markdown formatter for bold text, headers, lists, and Stylist Pro-Tips
  */
 function FormattedMessage({ content, isUser }: { content: string; isUser: boolean }) {
   if (isUser) {
-    return <span>{content}</span>;
+    return <span className="whitespace-pre-wrap">{content}</span>;
   }
 
   const lines = content.split("\n");
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       {lines.map((line, lineIdx) => {
-        if (!line.trim()) {
-          return <div key={lineIdx} className="h-1" />;
+        const trimmed = line.trim();
+        if (!trimmed) {
+          return <div key={lineIdx} className="h-0.5" />;
         }
 
-        // Highlight pro-tips with custom styling
-        if (line.includes("Stylist Pro-Tip:")) {
+        // Headings (### or ##)
+        if (trimmed.startsWith("### ") || trimmed.startsWith("## ")) {
+          const title = trimmed.replace(/^#{2,3}\s+/, "");
+          return (
+            <h3
+              key={lineIdx}
+              className="pt-2 pb-0.5 text-sm sm:text-base font-extrabold text-gray-950 tracking-tight flex items-center gap-1.5"
+            >
+              <span className="text-xs text-gray-400">✦</span>
+              <RenderMarkdownLine line={title} />
+            </h3>
+          );
+        }
+
+        // Pro-Tip or Highlight Callout Box
+        if (trimmed.includes("Stylist Pro-Tip:") || trimmed.includes("💡 **Tip:") || trimmed.startsWith("💡 ")) {
           return (
             <div
               key={lineIdx}
-              className="my-2 rounded-xl bg-amber-50/80 border border-amber-200/70 p-3 text-xs text-amber-950 font-medium"
+              className="my-3 rounded-2xl bg-[#fffaf0] border border-[#f5e3ba] p-3.5 text-xs sm:text-sm text-amber-950 font-medium leading-relaxed shadow-2xs"
             >
-              <RenderMarkdownLine line={line} />
+              <RenderMarkdownLine line={trimmed} />
             </div>
           );
         }
 
+        // Numbered list item (e.g. "1. **Title:** Desc")
+        const numberedMatch = trimmed.match(/^(\d+)\.\s+(.*)/);
+        if (numberedMatch) {
+          const num = numberedMatch[1];
+          const rest = numberedMatch[2];
+          return (
+            <div key={lineIdx} className="flex items-start gap-2.5 pl-0.5 my-1 text-xs sm:text-sm">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-black/5 text-[10px] font-bold text-gray-700 mt-0.5">
+                {num}
+              </span>
+              <div className="flex-1 leading-relaxed">
+                <RenderMarkdownLine line={rest} />
+              </div>
+            </div>
+          );
+        }
+
+        // Unordered list item (e.g. "• Item" or "- Item" or "* Item")
+        const bulletMatch = trimmed.match(/^([•\-\*])\s+(.*)/);
+        if (bulletMatch) {
+          const rest = bulletMatch[2];
+          return (
+            <div key={lineIdx} className="flex items-start gap-2.5 pl-1 my-1 text-xs sm:text-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-gray-500 shrink-0 mt-2" />
+              <div className="flex-1 leading-relaxed">
+                <RenderMarkdownLine line={rest} />
+              </div>
+            </div>
+          );
+        }
+
+        // Standard paragraph
         return (
-          <p key={lineIdx} className="leading-relaxed">
-            <RenderMarkdownLine line={line} />
+          <p key={lineIdx} className="leading-relaxed text-xs sm:text-sm">
+            <RenderMarkdownLine line={trimmed} />
           </p>
         );
       })}
@@ -521,17 +849,30 @@ function FormattedMessage({ content, isUser }: { content: string; isUser: boolea
 }
 
 function RenderMarkdownLine({ line }: { line: string }) {
-  // Split on bold syntax: **bold text**
-  const parts = line.split(/(\*\*[^*]+\*\*)/g);
+  const parts = line.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g);
 
   return (
     <>
       {parts.map((part, i) => {
         if (part.startsWith("**") && part.endsWith("**")) {
           return (
-            <strong key={i} className="font-semibold text-gray-950">
+            <strong key={i} className="font-extrabold text-gray-950">
               {part.slice(2, -2)}
             </strong>
+          );
+        }
+        if (part.startsWith("*") && part.endsWith("*") && part.length > 2) {
+          return (
+            <em key={i} className="italic text-gray-800">
+              {part.slice(1, -1)}
+            </em>
+          );
+        }
+        if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
+          return (
+            <code key={i} className="rounded bg-black/5 px-1 py-0.5 text-[11px] font-mono text-gray-800">
+              {part.slice(1, -1)}
+            </code>
           );
         }
         return <span key={i}>{part}</span>;
@@ -539,3 +880,4 @@ function RenderMarkdownLine({ line }: { line: string }) {
     </>
   );
 }
+

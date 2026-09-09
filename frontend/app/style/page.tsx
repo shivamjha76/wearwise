@@ -7,663 +7,836 @@ import { API_BASE_URL, getImageUrl } from "@/lib/api";
 import { getStoredUser, getAuthHeaders } from "@/lib/auth";
 
 type WardrobeItem = {
-    id: number;
-    user_id: number;
-    category: string;
-    color: string;
-    fit: string | null;
-    pattern: string | null;
-    style: string | null;
-    image_url: string | null;
+  id: number;
+  user_id: number;
+  category: string;
+  color: string;
+  fit: string | null;
+  pattern: string | null;
+  style: string | null;
+  image_url: string | null;
 };
 
 type Recommendation = {
-    top_id: number;
-    bottom_id: number;
-    shoes_id: number;
-    score: number;
+  top_id: number;
+  bottom_id: number;
+  shoes_id: number;
+  score: number;
+  explanation?: string;
 };
 
 type OutfitResponse = {
-    user_id: number;
-    occasion: string;
-    recommendation: Recommendation;
-    explanation?: string;
+  user_id: number;
+  occasion: string;
+  recommendation: Recommendation;
+  recommendations?: Recommendation[];
+  explanation?: string;
 };
 
-const occasions = [
-    {
-        value: "college",
-        label: "College",
-        icon: "▣",
-    },
-    {
-        value: "casual",
-        label: "Casual",
-        icon: "□",
-    },
-    {
-        value: "party",
-        label: "Party",
-        icon: "✦",
-    },
-    {
-        value: "interview",
-        label: "Interview",
-        icon: "▤",
-    },
-    {
-        value: "date",
-        label: "Date",
-        icon: "♡",
-    },
+type LiveWeatherData = {
+  status: string;
+  temperature: number;
+  apparent_temperature: number;
+  weather_category: "warm" | "cool" | "cold";
+  condition: string;
+  icon: string;
+  styling_tip: string;
+  humidity: number;
+  wind_speed: number;
+  city: string;
+  is_precipitation: boolean;
+};
+
+// ================= CONFIGURATION =================
+const OCCASIONS = [
+  { value: "casual", label: "Casual", icon: "☕", desc: "Relaxed daily comfort" },
+  { value: "college", label: "College", icon: "🎒", desc: "Effortless campus style" },
+  { value: "party", label: "Party", icon: "🥂", desc: "Bold statement energy" },
+  { value: "interview", label: "Interview", icon: "💼", desc: "Sharp professional polish" },
+  { value: "date", label: "Date", icon: "🍷", desc: "Sophisticated understated charm" },
 ];
 
-const weatherOptions = [
-    {
-        value: "warm",
-        label: "Warm",
-        icon: "☼",
-    },
-    {
-        value: "cool",
-        label: "Cool",
-        icon: "◌",
-    },
-    {
-        value: "cold",
-        label: "Cold",
-        icon: "❄",
-    },
+const WEATHER_OPTIONS = [
+  { value: "warm", label: "Warm", icon: "☀️", temp: "22°C+" },
+  { value: "cool", label: "Cool", icon: "🍂", temp: "14°C–21°C" },
+  { value: "cold", label: "Cold", icon: "❄️", temp: "< 14°C" },
 ];
 
-const styleOptions = [
-    {
-        value: "minimal",
-        label: "Clean & Minimal",
-        icon: "♧",
-    },
-    {
-        value: "casual",
-        label: "Casual",
-        icon: "□",
-    },
-    {
-        value: "streetwear",
-        label: "Streetwear",
-        icon: "◇",
-    },
-    {
-        value: "formal",
-        label: "Smart & Formal",
-        icon: "✦",
-    },
+const STYLE_VIBES = [
+  { value: "minimal", label: "Clean Minimal", icon: "♧" },
+  { value: "casual", label: "Casual", icon: "□" },
+  { value: "streetwear", label: "Streetwear", icon: "⚡" },
+  { value: "formal", label: "Smart Formal", icon: "✦" },
 ];
 
-function getImage(item: WardrobeItem) {
-    if (item.image_url) {
-        return getImageUrl(item.image_url) || item.image_url;
-    }
+const COLOR_MAP: Record<string, string> = {
+  white: "#ffffff",
+  black: "#171717",
+  grey: "#71717a",
+  beige: "#d4c5a9",
+  blue: "#2563eb",
+  green: "#16a34a",
+  olive: "#556b2f",
+  brown: "#78350f",
+  maroon: "#881337",
+};
 
-    const text = `${item.color}+${item.category}`;
-
-    return `https://placehold.co/600x700/f7f7f5/111111?text=${encodeURIComponent(
-        text
-    )}`;
+function getItemRole(category: string): "Top" | "Bottom" | "Footwear" {
+  const value = category.toLowerCase();
+  if (value === "jeans" || value === "pants" || value === "trousers" || value === "bottom") {
+    return "Bottom";
+  }
+  if (value === "shoes" || value === "sneakers" || value === "loafers" || value === "boots") {
+    return "Footwear";
+  }
+  return "Top";
 }
 
-function getItemType(category: string) {
-    const value = category.toLowerCase();
+function GarmentCard({ item, role }: { item: WardrobeItem; role: string }) {
+  const hex = COLOR_MAP[item.color.toLowerCase()] || "#9ca3af";
 
-    if (
-        value === "jeans" ||
-        value === "pants" ||
-        value === "trousers" ||
-        value === "bottom"
-    ) {
-        return "Bottom";
-    }
+  return (
+    <div className="group relative flex flex-col rounded-3xl border border-[#e2e4e7] bg-white p-4 shadow-xs transition-all duration-200 hover:-translate-y-1 hover:shadow-md">
+      {/* Properly Framed Image */}
+      <div className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl bg-[#f7f7f5] border border-[#eceef0] p-3 flex items-center justify-center">
+        {item.image_url ? (
+          <img
+            src={getImageUrl(item.image_url) || item.image_url}
+            alt={`${item.color} ${item.category}`}
+            className="h-full w-full object-contain object-center transition-transform duration-300 group-hover:scale-105"
+            onError={(e) => {
+              (e.currentTarget as HTMLElement).style.display = "none";
+            }}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-4xl">
+            {role === "Top" ? "👕" : role === "Bottom" ? "👖" : "👟"}
+          </div>
+        )}
 
-    if (value === "shoes" || value === "sneakers") {
-        return "Footwear";
-    }
-
-    return "Top";
-}
-
-function ClothingCard({
-    item,
-}: {
-    item: WardrobeItem;
-}) {
-    return (
-        <div className="min-w-0">
-            <div className="aspect-[4/4.7] overflow-hidden rounded-xl bg-[#f6f6f4]">
-                <img
-                    src={getImage(item)}
-                    alt={`${item.color} ${item.category}`}
-                    className="h-full w-full object-cover"
-                />
-            </div>
-
-            <h3 className="mt-3 truncate text-[15px] font-semibold text-gray-950">
-                {item.color} {item.category}
-            </h3>
-
-            <div className="mt-2 flex flex-wrap gap-1.5">
-                <span className="rounded-full bg-[#f0f1f2] px-2.5 py-1 text-[12px] text-gray-700">
-                    {getItemType(item.category)}
-                </span>
-
-                {item.style && (
-                    <span className="rounded-full bg-[#f0f1f2] px-2.5 py-1 text-[12px] capitalize text-gray-700">
-                        {item.style}
-                    </span>
-                )}
-
-                {item.fit && (
-                    <span className="rounded-full bg-[#f0f1f2] px-2.5 py-1 text-[12px] capitalize text-gray-700">
-                        {item.fit}
-                    </span>
-                )}
-            </div>
+        {/* Role Pill */}
+        <div className="absolute top-2.5 left-2.5">
+          <span className="rounded-full bg-black/80 backdrop-blur-md px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-xs">
+            {role}
+          </span>
         </div>
-    );
+      </div>
+
+      {/* Details */}
+      <div className="mt-3.5 px-1">
+        <div className="flex items-center gap-2">
+          <span
+            className="h-3 w-3 rounded-full border border-black/10 shadow-2xs"
+            style={{ backgroundColor: hex }}
+          />
+          <h3 className="text-sm font-bold capitalize text-gray-950 truncate">
+            {item.color} {item.category}
+          </h3>
+        </div>
+
+        {/* Tags */}
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          {item.fit && (
+            <span className="rounded-md border border-[#eceef0] bg-[#fbfbf9] px-2 py-0.5 text-[10px] font-medium capitalize text-gray-600">
+              {item.fit}
+            </span>
+          )}
+          {item.style && (
+            <span className="rounded-md border border-[#eceef0] bg-[#fbfbf9] px-2 py-0.5 text-[10px] font-medium capitalize text-gray-600">
+              {item.style}
+            </span>
+          )}
+          {item.pattern && (
+            <span className="rounded-md border border-[#eceef0] bg-[#fbfbf9] px-2 py-0.5 text-[10px] font-medium capitalize text-gray-600">
+              {item.pattern}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function StylePage() {
-    const router = useRouter();
+  const router = useRouter();
 
-    const [occasion, setOccasion] = useState("casual");
-    const [weather, setWeather] = useState("warm");
-    const [styleVibe, setStyleVibe] = useState("minimal");
+  const [occasion, setOccasion] = useState("casual");
+  const [weather, setWeather] = useState("warm");
+  const [styleVibe, setStyleVibe] = useState("minimal");
 
-    const [outfit, setOutfit] = useState<OutfitResponse | null>(null);
-    const [wardrobe, setWardrobe] = useState<WardrobeItem[]>([]);
+  const [liveWeather, setLiveWeather] = useState<LiveWeatherData | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState("");
 
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
-    const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-    const [saveMessage, setSaveMessage] = useState("");
+  const [outfit, setOutfit] = useState<OutfitResponse | null>(null);
+  const [wardrobe, setWardrobe] = useState<WardrobeItem[]>([]);
 
-    useEffect(() => {
-        const user = getStoredUser();
-        if (!user) {
-            router.push("/login");
-        }
-    }, [router]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveMessage, setSaveMessage] = useState("");
 
-    const generateOutfit = async () => {
-        const user = getStoredUser();
+  useEffect(() => {
+    const user = getStoredUser();
+    if (!user) {
+      router.push("/login");
+    }
+  }, [router]);
 
-        if (!user) {
-            router.push("/login");
-            return;
-        }
+  const detectLocalWeather = () => {
+    if (typeof window === "undefined" || !navigator.geolocation) {
+      setWeatherError("Geolocation is not supported by your browser.");
+      return;
+    }
 
-        setLoading(true);
-        setError("");
-        setSaveStatus("idle");
-        setSaveMessage("");
+    setWeatherLoading(true);
+    setWeatherError("");
 
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
         try {
-            const [outfitResponse, wardrobeResponse] = await Promise.all([
-                fetch(
-                    `${API_BASE_URL}/outfits/${user.id}?occasion=${occasion}&style_vibe=${styleVibe}&weather=${weather}`,
-                    {
-                        method: "POST",
-                        headers: getAuthHeaders(),
-                    }
-                ),
-
-                fetch(`${API_BASE_URL}/wardrobe/${user.id}`, {
-                    headers: getAuthHeaders(),
-                }),
-            ]);
-
-            if (!outfitResponse.ok) {
-                throw new Error("Could not generate outfit");
-            }
-
-            if (!wardrobeResponse.ok) {
-                throw new Error("Could not load wardrobe");
-            }
-
-            const outfitData = await outfitResponse.json();
-            const wardrobeData = await wardrobeResponse.json();
-
-            setOutfit(outfitData);
-            setWardrobe(wardrobeData);
-
-            localStorage.setItem(
-                "wearwise_recommendation",
-                JSON.stringify(outfitData)
-            );
-
-            localStorage.setItem(
-                "wearwise_style_preferences",
-                JSON.stringify({
-                    weather,
-                    styleVibe,
-                })
-            );
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+          const res = await fetch(`${API_BASE_URL}/weather/current?lat=${lat}&lon=${lon}`);
+          if (!res.ok) {
+            throw new Error("Failed to fetch weather forecast");
+          }
+          const data: LiveWeatherData = await res.json();
+          setLiveWeather(data);
+          if (data.weather_category) {
+            setWeather(data.weather_category);
+          }
         } catch (err) {
-            console.error(err);
-            setError("Something went wrong while creating your outfit.");
+          console.error(err);
+          setWeatherError("Could not retrieve live weather forecast.");
         } finally {
-            setLoading(false);
+          setWeatherLoading(false);
         }
-    };
-
-    const getWardrobeItem = (id: number) => {
-        return wardrobe.find((item) => item.id === id);
-    };
-
-    const top = outfit?.recommendation
-        ? getWardrobeItem(outfit.recommendation.top_id)
-        : undefined;
-
-    const bottom = outfit?.recommendation
-        ? getWardrobeItem(outfit.recommendation.bottom_id)
-        : undefined;
-
-    const shoes = outfit?.recommendation
-        ? getWardrobeItem(outfit.recommendation.shoes_id)
-        : undefined;
-
-    const saveOutfit = async () => {
-        const user = getStoredUser();
-        if (!user || !outfit || !top || !bottom || !shoes) return;
-
-        setSaveStatus("saving");
-        setSaveMessage("");
-
-        try {
-            const res = await fetch(`${API_BASE_URL}/outfits/${user.id}/save`, {
-                method: "POST",
-                headers: getAuthHeaders(),
-                body: JSON.stringify({
-                    top_id: top.id,
-                    bottom_id: bottom.id,
-                    shoes_id: shoes.id,
-                    occasion: outfit.occasion,
-                    style_vibe: styleVibe || null,
-                    score: outfit.recommendation.score,
-                    explanation: outfit.explanation || "AI explanation unavailable",
-                }),
-            });
-
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                throw new Error(errData.detail || "Failed to save outfit");
-            }
-
-            setSaveStatus("saved");
-            setSaveMessage("Saved to your Lookbook!");
-        } catch (err: unknown) {
-            console.error(err);
-            setSaveStatus("error");
-            setSaveMessage(err instanceof Error ? err.message : "Failed to save outfit");
+      },
+      (geoErr) => {
+        console.warn("Geolocation error:", geoErr);
+        setWeatherLoading(false);
+        if (geoErr.code === geoErr.PERMISSION_DENIED) {
+          setWeatherError("Location access denied. You can select weather manually below.");
+        } else {
+          setWeatherError("Could not pinpoint location. Please pick weather manually below.");
         }
-    };
+      },
+      { timeout: 8000 }
+    );
+  };
 
-    return (
-        <main className="min-h-screen bg-white">
-            <div className="mx-auto max-w-[1320px] px-6 py-10 lg:px-8">
+  const generateOutfit = async () => {
+    const user = getStoredUser();
+    if (!user) {
+      router.push("/login");
+      return;
+    }
 
-                {/* PAGE HEADER */}
-                <div className="mb-7">
-                    <p className="text-[14px] font-bold uppercase tracking-[0.16em] text-[#45546a]">
-                        Style Me
+    setLoading(true);
+    setError("");
+    setSaveStatus("idle");
+    setSaveMessage("");
+
+    try {
+      const [outfitResponse, wardrobeResponse] = await Promise.all([
+        fetch(
+          `${API_BASE_URL}/outfits/${user.id}?occasion=${occasion}&style_vibe=${styleVibe}&weather=${weather}`,
+          {
+            method: "POST",
+            headers: getAuthHeaders(),
+          }
+        ),
+        fetch(`${API_BASE_URL}/wardrobe/${user.id}`, {
+          headers: getAuthHeaders(),
+        }),
+      ]);
+
+      if (!outfitResponse.ok) {
+        throw new Error("Could not generate outfit");
+      }
+
+      if (!wardrobeResponse.ok) {
+        throw new Error("Could not load wardrobe");
+      }
+
+      const outfitData = await outfitResponse.json();
+      const wardrobeData = await wardrobeResponse.json();
+
+      setOutfit(outfitData);
+      setWardrobe(wardrobeData);
+
+      localStorage.setItem("wearwise_recommendation", JSON.stringify(outfitData));
+      localStorage.setItem(
+        "wearwise_style_preferences",
+        JSON.stringify({ weather, styleVibe })
+      );
+    } catch (err) {
+      console.error(err);
+      setError(
+        "Could not generate an outfit. Make sure you have added at least one top, bottom, and footwear in your wardrobe."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const [selectedLookIdx, setSelectedLookIdx] = useState(0);
+
+  const getWardrobeItem = (id: number) => {
+    return wardrobe.find((item) => item.id === id);
+  };
+
+  const recommendationsList: Recommendation[] =
+    outfit?.recommendations && outfit.recommendations.length > 0
+      ? outfit.recommendations
+      : outfit?.recommendation
+      ? [outfit.recommendation]
+      : [];
+
+  const activeRec: Recommendation | undefined =
+    recommendationsList[selectedLookIdx] || recommendationsList[0];
+
+  const top = activeRec ? getWardrobeItem(activeRec.top_id) : undefined;
+  const bottom = activeRec ? getWardrobeItem(activeRec.bottom_id) : undefined;
+  const shoes = activeRec ? getWardrobeItem(activeRec.shoes_id) : undefined;
+  const activeExplanation =
+    activeRec?.explanation || outfit?.explanation || "AI explanation unavailable";
+
+  const saveOutfit = async () => {
+    const user = getStoredUser();
+    if (!user || !outfit || !activeRec || !top || !bottom || !shoes) return;
+
+    setSaveStatus("saving");
+    setSaveMessage("");
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/outfits/${user.id}/save`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          top_id: top.id,
+          bottom_id: bottom.id,
+          shoes_id: shoes.id,
+          occasion: outfit.occasion,
+          style_vibe: styleVibe || null,
+          score: activeRec.score,
+          explanation: activeExplanation,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "Failed to save outfit");
+      }
+
+      setSaveStatus("saved");
+      setSaveMessage("Saved to your Lookbook!");
+    } catch (err: unknown) {
+      console.error(err);
+      setSaveStatus("error");
+      setSaveMessage(err instanceof Error ? err.message : "Failed to save outfit");
+    }
+  };
+
+  return (
+    <main className="relative min-h-screen overflow-hidden bg-[#f7f7f5] px-5 py-8 sm:px-8 sm:py-12 text-[#111111]">
+      {/* Ambient background glow */}
+      <div className="pointer-events-none absolute -top-40 left-1/2 -z-10 h-[500px] w-[900px] -translate-x-1/2 rounded-full bg-gradient-to-b from-[#e8ebe4]/50 via-[#fcfbf7]/40 to-transparent blur-3xl" />
+
+      <div className="mx-auto max-w-6xl">
+        
+        {/* ================= HEADER ================= */}
+        <div className="mb-8 border-b border-[#e2e4e7] pb-8">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#dedad0] bg-white/90 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#45546a] shadow-2xs backdrop-blur-md">
+                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>AI Outfit Architect</span>
+              </div>
+              <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">
+                Curate Today&apos;s Look
+              </h1>
+              <p className="mt-1 max-w-xl text-xs sm:text-sm text-gray-600">
+                Select your context below. WearWise dynamically pairs your existing clothes for effortless harmony.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <Link
+                href="/wardrobe"
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-[#d4d6da] bg-white px-4 text-xs font-semibold text-gray-800 shadow-2xs transition hover:bg-gray-50 active:scale-95"
+              >
+                <span>👕 My Wardrobe</span>
+              </Link>
+              <Link
+                href="/saved"
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-white border border-[#d4d6da] px-4 text-xs font-semibold text-gray-800 shadow-2xs transition hover:bg-gray-50 active:scale-95"
+              >
+                <span>★ Saved Looks</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* ================= TACTILE CONFIGURATION STUDIO ================= */}
+        <section className="rounded-3xl border border-[#e2e4e7] bg-white p-6 shadow-[0_10px_30px_rgba(27,35,43,0.04)]">
+          
+          {/* Row 1: Occasion Chips */}
+          <div>
+            <label className="mb-2.5 block text-xs font-bold uppercase tracking-wider text-gray-700">
+              1. Select Occasion
+            </label>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {OCCASIONS.map((occ) => {
+                const isSelected = occasion === occ.value;
+                return (
+                  <button
+                    key={occ.value}
+                    type="button"
+                    onClick={() => setOccasion(occ.value)}
+                    className={`flex flex-col items-start rounded-2xl border p-3 text-left transition-all cursor-pointer ${
+                      isSelected
+                        ? "border-black bg-[#171717] text-white shadow-xs"
+                        : "border-gray-200 bg-[#fbfbf9] text-gray-800 hover:border-gray-400 hover:bg-white"
+                    }`}
+                  >
+                    <span className="text-xl">{occ.icon}</span>
+                    <span className="mt-2 text-xs font-bold">{occ.label}</span>
+                    <span
+                      className={`mt-0.5 text-[10px] line-clamp-1 ${
+                        isSelected ? "text-gray-300" : "text-gray-500"
+                      }`}
+                    >
+                      {occ.desc}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Live Real-Time Weather Integration Bar */}
+          <div className="mt-6 rounded-2xl border border-[#eceef0] bg-[#fbfbf9] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-lg shadow-2xs">
+                  {liveWeather ? liveWeather.icon : "📍"}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-xs font-bold text-gray-900">
+                      {liveWeather ? (
+                        <span>
+                          {liveWeather.city} · {liveWeather.temperature}°C {liveWeather.condition}
+                        </span>
+                      ) : (
+                        "Real-Time Weather Calibrator"
+                      )}
                     </p>
+                    {liveWeather && (
+                      <span className="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.2 text-[9px] font-bold uppercase tracking-wider">
+                        Calibrated ({liveWeather.weather_category}) ✓
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-gray-500 max-w-xl leading-relaxed">
+                    {liveWeather
+                      ? liveWeather.styling_tip
+                      : "Detect your live local forecast to automatically calibrate fabric weights, layers, and footwear recommendations."}
+                  </p>
+                </div>
+              </div>
 
-                    <h1 className="mt-3 text-[46px] font-bold leading-[1.05] tracking-[-0.04em] text-black sm:text-[52px]">
-                        Get Your Outfit
-                    </h1>
+              <button
+                type="button"
+                onClick={detectLocalWeather}
+                disabled={weatherLoading}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-bold text-gray-800 shadow-2xs hover:bg-gray-50 transition active:scale-95 disabled:opacity-60 cursor-pointer shrink-0"
+              >
+                {weatherLoading ? (
+                  <>
+                    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-gray-400 border-t-black" />
+                    <span>Pinpointing...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>{liveWeather ? "↻ Refresh Weather" : "📍 Detect Local Weather"}</span>
+                  </>
+                )}
+              </button>
+            </div>
 
-                    <p className="mt-3 text-[18px] text-[#45546a]">
-                        Tell us the occasion and we&apos;ll create a stylish outfit from
-                        your wardrobe.
-                    </p>
+            {weatherError && (
+              <p className="mt-2 text-[11px] text-amber-800 font-medium">
+                ⚠️ {weatherError}
+              </p>
+            )}
+          </div>
+
+          {/* Row 2: Weather & Style Segmented Controls + Action Button */}
+          <div className="mt-6 grid gap-4 md:grid-cols-[1fr_1.3fr_auto] items-end border-t border-[#eceef0] pt-5">
+            
+            {/* Weather Pills */}
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700">
+                  2. Weather Context
+                </label>
+                {liveWeather && (
+                  <span className="text-[10px] text-emerald-700 font-semibold">
+                    {liveWeather.temperature}°C ({weather})
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-1 rounded-xl bg-[#f4f5f6] p-1">
+                {WEATHER_OPTIONS.map((w) => {
+                  const isSelected = weather === w.value;
+                  return (
+                    <button
+                      key={w.value}
+                      type="button"
+                      onClick={() => setWeather(w.value)}
+                      className={`flex items-center justify-center gap-1 rounded-lg py-2 text-center text-xs font-semibold transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-white text-black shadow-2xs"
+                          : "text-gray-500 hover:text-black"
+                      }`}
+                    >
+                      <span>{w.icon}</span>
+                      <span>{w.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Style Vibe Pills */}
+            <div>
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700">
+                3. Style Vibe
+              </label>
+              <div className="grid grid-cols-4 gap-1 rounded-xl bg-[#f4f5f6] p-1">
+                {STYLE_VIBES.map((s) => {
+                  const isSelected = styleVibe === s.value;
+                  return (
+                    <button
+                      key={s.value}
+                      type="button"
+                      onClick={() => setStyleVibe(s.value)}
+                      className={`flex items-center justify-center gap-1 rounded-lg py-2 text-center text-xs font-semibold transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-white text-black shadow-2xs"
+                          : "text-gray-500 hover:text-black"
+                      }`}
+                    >
+                      <span>{s.icon}</span>
+                      <span className="truncate">{s.label.split(" ")[0]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Primary Generate Button */}
+            <div>
+              <button
+                type="button"
+                onClick={generateOutfit}
+                disabled={loading}
+                className="flex h-11 w-full md:w-auto items-center justify-center gap-2 rounded-xl bg-[#171717] px-6 text-xs font-bold text-white shadow-sm transition hover:bg-black active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {loading ? (
+                  <>
+                    <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    <span>Styling...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Generate Outfit</span>
+                    <span>✦</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Error Notification */}
+        {error && (
+          <div className="mt-6 flex items-center justify-between rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-800 animate-pop-in">
+            <div className="flex items-center gap-2">
+              <span>⚠️</span>
+              <span>{error}</span>
+            </div>
+            <Link href="/wardrobe" className="font-bold underline">
+              Add pieces in Wardrobe →
+            </Link>
+          </div>
+        )}
+
+        {/* ================= LOADING SKELETON ================= */}
+        {loading && (
+          <div className="mt-8 grid gap-6 md:grid-cols-3">
+            {["Top", "Bottom", "Footwear"].map((role) => (
+              <div
+                key={role}
+                className="flex flex-col rounded-3xl border border-[#e2e4e7] bg-white p-4 shadow-xs"
+              >
+                <div className="aspect-[4/5] w-full rounded-2xl bg-[#f4f5f6] animate-pulse flex flex-col items-center justify-center text-gray-300">
+                  <span className="text-3xl">✦</span>
+                  <span className="mt-2 text-xs font-medium">Harmonizing {role}...</span>
+                </div>
+                <div className="mt-3.5 space-y-2">
+                  <div className="h-4 w-3/4 rounded bg-[#f4f5f6] animate-pulse" />
+                  <div className="h-3 w-1/2 rounded bg-[#f4f5f6] animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ================= OUTFIT RESULTS ================= */}
+        {!loading && outfit && top && bottom && shoes && (
+          <div className="mt-8 space-y-6 animate-pop-in">
+            
+            {/* Top Showcase Card */}
+            <div className="grid gap-6 lg:grid-cols-[1.9fr_1.1fr]">
+              
+              {/* Left: 3 Garment Cards Grid */}
+              <div className="rounded-3xl border border-[#e2e4e7] bg-white p-6 shadow-[0_10px_30px_rgba(27,35,43,0.04)]">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#eceef0] pb-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-200">
+                        ⭐ {activeRec?.score ?? outfit.recommendation.score}% Compatibility
+                      </span>
+                      <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[10px] font-semibold text-gray-700 capitalize">
+                        {outfit.occasion}
+                      </span>
+                    </div>
+                    <h2 className="mt-1.5 text-xl font-extrabold text-gray-950">
+                      Cohesive 3-Piece Formula
+                    </h2>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={saveOutfit}
+                      disabled={saveStatus === "saving" || saveStatus === "saved"}
+                      className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition shadow-2xs cursor-pointer ${
+                        saveStatus === "saved"
+                          ? "bg-emerald-700 text-white cursor-default"
+                          : "bg-[#171717] text-white hover:bg-black active:scale-95 disabled:opacity-50"
+                      }`}
+                    >
+                      <span>{saveStatus === "saved" ? "✓ Saved" : "★ Save Look"}</span>
+                    </button>
+
+                    <Link
+                      href="/outfit"
+                      className="rounded-xl border border-gray-200 bg-[#fbfbf9] px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 transition"
+                    >
+                      Detailed View →
+                    </Link>
+                  </div>
                 </div>
 
-                {/* FILTER ROW */}
-                <div className="grid gap-5 lg:grid-cols-[1fr_1fr_1fr_1.05fr]">
-
-                    {/* Occasion */}
-                    <div>
-                        <label className="mb-2 block text-[15px] font-semibold text-black">
-                            Occasion
-                        </label>
-
-                        <div className="relative">
-                            <span className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-[22px] text-black">
-                                {occasions.find((x) => x.value === occasion)?.icon}
-                            </span>
-
-                            <select
-                                value={occasion}
-                                onChange={(e) => setOccasion(e.target.value)}
-                                className="h-[52px] w-full appearance-none rounded-xl border border-[#d9dde3] bg-white pl-14 pr-10 text-[16px] font-medium text-black outline-none transition focus:border-black"
-                            >
-                                {occasions.map((item) => (
-                                    <option key={item.value} value={item.value}>
-                                        {item.label}
-                                    </option>
-                                ))}
-                            </select>
-
-                            <span className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 text-gray-600">
-                                ⌄
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* Weather */}
-                    <div>
-                        <label className="mb-2 block text-[15px] font-semibold text-black">
-                            Weather
-                        </label>
-
-                        <div className="relative">
-                            <span className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-[25px] text-black">
-                                {weatherOptions.find((x) => x.value === weather)?.icon}
-                            </span>
-
-                            <select
-                                value={weather}
-                                onChange={(e) => setWeather(e.target.value)}
-                                className="h-[52px] w-full appearance-none rounded-xl border border-[#d9dde3] bg-white pl-14 pr-10 text-[16px] font-medium text-black outline-none transition focus:border-black"
-                            >
-                                {weatherOptions.map((item) => (
-                                    <option key={item.value} value={item.value}>
-                                        {item.label}
-                                    </option>
-                                ))}
-                            </select>
-
-                            <span className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 text-gray-600">
-                                ⌄
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* Style */}
-                    <div>
-                        <label className="mb-2 block text-[15px] font-semibold text-black">
-                            Style Vibe{" "}
-                            <span className="font-normal text-gray-500">
-                                (Optional)
-                            </span>
-                        </label>
-
-                        <div className="relative">
-                            <span className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-[23px] text-black">
-                                {styleOptions.find((x) => x.value === styleVibe)?.icon}
-                            </span>
-
-                            <select
-                                value={styleVibe}
-                                onChange={(e) => setStyleVibe(e.target.value)}
-                                className="h-[52px] w-full appearance-none rounded-xl border border-[#d9dde3] bg-white pl-14 pr-10 text-[16px] font-medium text-black outline-none transition focus:border-black"
-                            >
-                                {styleOptions.map((item) => (
-                                    <option key={item.value} value={item.value}>
-                                        {item.label}
-                                    </option>
-                                ))}
-                            </select>
-
-                            <span className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 text-gray-600">
-                                ⌄
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* Generate */}
-                    <div className="flex items-end">
+                {/* Multiple Look Formula Selector Tabs */}
+                {recommendationsList.length > 1 && (
+                  <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none border-b border-[#eceef0] pb-3.5">
+                    {recommendationsList.map((rec, rIdx) => {
+                      const isSelected = selectedLookIdx === rIdx;
+                      const label =
+                        rIdx === 0
+                          ? "Look 1: Top Match"
+                          : rIdx === 1
+                          ? "Look 2: Alternative"
+                          : `Look ${rIdx + 1}: Casual`;
+                      return (
                         <button
-                            onClick={generateOutfit}
-                            disabled={loading}
-                            className="h-[52px] w-full rounded-xl bg-[#171717] px-6 text-[16px] font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+                          key={rIdx}
+                          type="button"
+                          onClick={() => {
+                            setSelectedLookIdx(rIdx);
+                            setSaveStatus("idle");
+                            setSaveMessage("");
+                          }}
+                          className={`flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                            isSelected
+                              ? "bg-[#171717] text-white shadow-2xs"
+                              : "border border-gray-200 bg-[#fbfbf9] text-gray-700 hover:border-gray-400 hover:bg-white"
+                          }`}
                         >
-                            {loading ? "Creating Your Outfit..." : "Generate Outfit  ✦"}
+                          <span>{label}</span>
+                          <span
+                            className={`rounded-full px-1.5 py-0.2 text-[10px] ${
+                              isSelected ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"
+                            }`}
+                          >
+                            {rec.score}%
+                          </span>
                         </button>
-                    </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* 3 Pieces Grid */}
+                <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                  <GarmentCard item={top} role="Top" />
+                  <GarmentCard item={bottom} role="Bottom" />
+                  <GarmentCard item={shoes} role="Footwear" />
                 </div>
 
-                {/* ERROR */}
-                {error && (
-                    <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
-                        {error}
+                {/* Saved Notification */}
+                {saveStatus === "saved" && (
+                  <div className="mt-5 flex items-center justify-between rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-xs text-emerald-900">
+                    <span className="font-semibold">✓ Successfully saved to your Lookbook!</span>
+                    <Link href="/saved" className="font-bold underline hover:text-emerald-950">
+                      View Lookbook →
+                    </Link>
+                  </div>
+                )}
+              </div>
+
+              {/* Right: AI Stylist Harmonic Breakdown */}
+              <div className="rounded-3xl border border-[#e2e4e7] bg-white p-6 shadow-[0_10px_30px_rgba(27,35,43,0.04)] flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2 border-b border-[#eceef0] pb-3">
+                    <span className="text-amber-600 text-sm">✦</span>
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-gray-900">
+                      Harmonic Breakdown
+                    </h3>
+                  </div>
+
+                  {/* AI Explanation Quote */}
+                  <div className="mt-4 rounded-2xl bg-[#fffaf0] border border-[#f5e3ba] p-4">
+                    <p className="text-xs text-amber-900 font-bold mb-1">Stylist Rationale</p>
+                    <p className="text-xs leading-relaxed text-gray-700">
+                      &ldquo;{activeExplanation}&rdquo;
+                    </p>
+                  </div>
+
+                  {/* 4 Architectural Metric Rows */}
+                  <div className="mt-5 space-y-3.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span>🎨</span>
+                        <span className="font-semibold text-gray-800">Color Contrast</span>
+                      </div>
+                      <span className="font-bold text-emerald-700">Optimal Tonal Ratio</span>
                     </div>
-                )}
 
-                {/* RESULT */}
-                {outfit && top && bottom && shoes && (
-                    <>
-                        <div className="mt-7 grid gap-5 lg:grid-cols-[minmax(0,2.2fr)_minmax(320px,1fr)]">
-
-                            {/* OUTFIT CARD */}
-                            <section className="rounded-2xl border border-[#e4e5e7] bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
-
-                                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                                    <div>
-                                        <div className="flex items-center gap-2.5">
-                                            <h2 className="text-[27px] font-bold tracking-tight text-black">
-                                                Your Outfit
-                                            </h2>
-                                            <span className="rounded-full bg-[#fff4d7] px-3 py-1 text-xs font-bold text-[#5d4a18]">
-                                                ⭐ {outfit.recommendation.score}% Match
-                                            </span>
-                                        </div>
-
-                                        <p className="mt-1 text-[15px] text-[#45546a]">
-                                            A clean, comfortable and versatile look for a{" "}
-                                            <span className="font-semibold capitalize text-black">{outfit.occasion}</span> day
-                                            {weather ? <span> in <span className="font-semibold capitalize text-black">{weather}</span> weather</span> : ""}.
-                                        </p>
-                                    </div>
-
-                                    <div className="flex flex-wrap items-center gap-2 shrink-0">
-                                        <button
-                                            onClick={saveOutfit}
-                                            disabled={saveStatus === "saving" || saveStatus === "saved"}
-                                            className={`flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-semibold shadow-sm transition ${
-                                                saveStatus === "saved"
-                                                    ? "bg-emerald-600 text-white cursor-default"
-                                                    : "bg-black text-white hover:bg-gray-800 disabled:opacity-60"
-                                            }`}
-                                        >
-                                            {saveStatus === "saving" && "Saving..."}
-                                            {saveStatus === "saved" && "✓ Saved to Lookbook"}
-                                            {saveStatus === "idle" && "★ Save Outfit"}
-                                            {saveStatus === "error" && "Try Again"}
-                                        </button>
-
-                                        <Link
-                                            href="/outfit"
-                                            className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 transition"
-                                        >
-                                            Detailed View →
-                                        </Link>
-                                    </div>
-                                </div>
-
-                                {/* CLOTHES */}
-                                <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                                    <ClothingCard item={top} />
-                                    <ClothingCard item={bottom} />
-                                    <ClothingCard item={shoes} />
-                                </div>
-
-                                {saveStatus === "saved" && (
-                                    <div className="mt-5 flex items-center justify-between rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-xs text-emerald-900">
-                                        <span>✓ This outfit has been added to your personal Lookbook!</span>
-                                        <Link href="/saved" className="font-bold underline underline-offset-2 hover:text-emerald-950">
-                                            View in Lookbook →
-                                        </Link>
-                                    </div>
-                                )}
-
-                            </section>
-
-                            {/* WHY THIS WORKS */}
-                            <section className="rounded-2xl border border-[#e4e5e7] bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
-
-                                <div className="flex items-center gap-3">
-                                    <span className="text-[25px]">♧</span>
-
-                                    <h2 className="text-[21px] font-bold text-black">
-                                        Why this works?
-                                    </h2>
-                                </div>
-
-                                <p className="mt-5 text-[16px] leading-7 text-[#45546a]">
-                                    {outfit.explanation ||
-                                        "This outfit balances your selected occasion, personal style and the items already available in your wardrobe."}
-                                </p>
-
-                                <div className="my-5 border-t border-[#e3e5e8]" />
-
-                                <div className="space-y-5">
-
-                                    <div className="flex gap-4">
-                                        <span className="text-[24px]">◉</span>
-
-                                        <div>
-                                            <h3 className="font-semibold text-black">
-                                                Color match
-                                            </h3>
-
-                                            <p className="mt-1 text-sm text-[#526075]">
-                                                Colors that work well together
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex gap-4">
-                                        <span className="text-[24px]">♧</span>
-
-                                        <div>
-                                            <h3 className="font-semibold text-black">
-                                                Style match
-                                            </h3>
-
-                                            <p className="mt-1 text-sm text-[#526075]">
-                                                Matches your style preference
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex gap-4">
-                                        <span className="text-[24px]">☼</span>
-
-                                        <div>
-                                            <h3 className="font-semibold text-black">
-                                                Weather friendly
-                                            </h3>
-
-                                            <p className="mt-1 text-sm text-[#526075]">
-                                                Selected for your preferred weather
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex gap-4">
-                                        <span className="text-[24px]">✓</span>
-
-                                        <div>
-                                            <h3 className="font-semibold text-black">
-                                                From your wardrobe
-                                            </h3>
-
-                                            <p className="mt-1 text-sm text-[#526075]">
-                                                Items are selected from your existing collection
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                </div>
-                            </section>
-                        </div>
-
-                        {/* ACTION BUTTONS */}
-                        <div className="mt-6 grid gap-5 md:grid-cols-2">
-
-                            <button
-                                onClick={generateOutfit}
-                                className="h-[72px] rounded-xl border border-[#cfd3d8] bg-white text-[16px] font-semibold text-black transition hover:bg-gray-50"
-                            >
-                                ⟳ &nbsp; Try Another Outfit
-                            </button>
-
-                            <button
-                                onClick={() => router.push("/wardrobe/next-purchase")}
-                                className="h-[72px] rounded-xl bg-[#171717] text-left text-white transition hover:bg-black"
-                            >
-                                <div className="flex items-center justify-center gap-4">
-                                    <span className="text-[25px]">♧</span>
-
-                                    <div>
-                                        <p className="text-[16px] font-semibold">
-                                            Complete My Wardrobe →
-                                        </p>
-
-                                        <p className="mt-1 text-sm text-gray-300">
-                                            See what you&apos;re missing
-                                        </p>
-                                    </div>
-                                </div>
-                            </button>
-
-                        </div>
-
-                        {/* BOTTOM INFO */}
-                        <div className="mt-6 flex flex-col gap-5 rounded-2xl bg-gradient-to-r from-[#f0f0ff] to-[#f8edfb] px-7 py-6 md:flex-row md:items-center md:justify-between">
-
-                            <div className="flex items-center gap-5">
-                                <div className="text-[35px]">🪄</div>
-
-                                <div>
-                                    <h3 className="text-[17px] font-bold text-black">
-                                        Want more outfit ideas?
-                                    </h3>
-
-                                    <p className="mt-1 text-sm text-[#526075]">
-                                        Add more items to your wardrobe and get even better
-                                        recommendations.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <button
-                                onClick={() => router.push("/wardrobe")}
-                                className="shrink-0 text-sm font-semibold text-black underline underline-offset-4"
-                            >
-                                Go to My Wardrobe →
-                            </button>
-                        </div>
-                    </>
-                )}
-
-                {/* INITIAL STATE */}
-                {!outfit && !loading && (
-                    <div className="mt-7 rounded-2xl border border-[#e4e5e7] bg-white px-6 py-16 text-center">
-                        <div className="text-5xl">✨</div>
-
-                        <h2 className="mt-5 text-2xl font-bold text-black">
-                            Ready to find your look?
-                        </h2>
-
-                        <p className="mx-auto mt-2 max-w-lg text-[#526075]">
-                            Choose your occasion above and let WearWise create an
-                            outfit using the clothes you already own.
-                        </p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span>👔</span>
+                        <span className="font-semibold text-gray-800">Silhouette Balance</span>
+                      </div>
+                      <span className="font-bold text-gray-900 capitalize">
+                        {top.fit || "Relaxed"} / {bottom.fit || "Standard"}
+                      </span>
                     </div>
-                )}
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span>🌤️</span>
+                        <span className="font-semibold text-gray-800">Weather Rating</span>
+                      </div>
+                      <span className="font-bold text-gray-900 capitalize">
+                        {weather} Comfort
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span>🌿</span>
+                        <span className="font-semibold text-gray-800">Wardrobe Owned</span>
+                      </div>
+                      <span className="font-bold text-emerald-700">100% In Closet</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Next Purchase Shortcut */}
+                <div className="mt-6 border-t border-[#eceef0] pt-4">
+                  <Link
+                    href="/wardrobe/next-purchase"
+                    className="flex items-center justify-between rounded-xl bg-[#fbfbf9] p-3 text-xs border border-[#e2e4e7] hover:border-black/30 transition group"
+                  >
+                    <div>
+                      <p className="font-bold text-gray-900">Want higher versatility?</p>
+                      <p className="text-[11px] text-gray-500">Discover your next purchase multiplier</p>
+                    </div>
+                    <span className="text-sm transition-transform group-hover:translate-x-1">→</span>
+                  </Link>
+                </div>
+
+              </div>
 
             </div>
-        </main>
-    );
+
+            {/* Bottom Quick-Action Bar */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl border border-[#e2e4e7] bg-white p-5 shadow-2xs">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🪄</span>
+                <div>
+                  <p className="text-xs font-bold text-gray-900">
+                    Looking for a different direction?
+                  </p>
+                  <p className="text-[11px] text-gray-500">
+                    Switch the occasion or tap below to generate alternative combinations.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={generateOutfit}
+                  className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-xs font-bold text-gray-800 hover:bg-gray-50 transition cursor-pointer"
+                >
+                  ⟳ Re-shuffle Look
+                </button>
+                <Link
+                  href="/stylist"
+                  className="rounded-xl bg-[#171717] px-4 py-2.5 text-xs font-bold text-white hover:bg-black transition"
+                >
+                  Ask AI Stylist 💬
+                </Link>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ================= INITIAL EMPTY STATE ================= */}
+        {!outfit && !loading && (
+          <div className="mt-8 rounded-3xl border border-dashed border-[#dedad0] bg-white p-12 text-center shadow-2xs">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#f7f7f5] text-3xl shadow-inner">
+              ✨
+            </div>
+            <h2 className="mt-4 text-xl font-extrabold text-gray-950">
+              Ready to find your look?
+            </h2>
+            <p className="mx-auto mt-1 max-w-md text-xs sm:text-sm text-gray-600">
+              Pick your occasion and weather above, then tap <strong className="text-black">Generate Outfit</strong>. WearWise will match clothes you already own with zero clashing.
+            </p>
+
+            <button
+              type="button"
+              onClick={generateOutfit}
+              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#171717] px-7 py-3 text-xs font-bold text-white shadow-sm transition hover:bg-black active:scale-95 cursor-pointer"
+            >
+              <span>Generate My Outfit</span>
+              <span>✦</span>
+            </button>
+          </div>
+        )}
+
+      </div>
+    </main>
+  );
 }

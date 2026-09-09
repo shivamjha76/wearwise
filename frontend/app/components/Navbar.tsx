@@ -35,7 +35,7 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-gray-200 bg-white/95 backdrop-blur">
+    <nav className="sticky top-0 z-50 border-b border-[#e5dfd5] bg-[#f4f0ea]/90 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5 sm:px-6">
         {/* Brand */}
         <Link
@@ -131,18 +131,11 @@ export default function Navbar() {
           ) : (
             <>
               <Link
-                href="/#how-it-works"
-                className="hidden rounded-lg px-3 py-2 text-gray-600 hover:bg-gray-100 hover:text-black sm:block"
-              >
-                How it works
-              </Link>
-
-              <Link
                 href="/login"
                 className={`rounded-lg px-3.5 py-2 text-sm font-semibold transition ${
                   pathname === "/login"
-                    ? "bg-gray-100 text-black"
-                    : "text-gray-700 hover:bg-gray-100 hover:text-black"
+                    ? "bg-[#e8e2d8] text-black"
+                    : "text-[#524a3e] hover:bg-[#eae4da] hover:text-black"
                 }`}
               >
                 Log In
