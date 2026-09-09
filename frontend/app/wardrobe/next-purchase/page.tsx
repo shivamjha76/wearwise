@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { API_BASE_URL } from "@/lib/api";
+import { getStoredUser, getAuthHeaders } from "@/lib/auth";
 
 type Product = { id: number; name: string; category: string; color: string; fit: string; price: number; brand: string; image: string };
 type Recommendation = { category: string; color: string; score: number; new_outfit_combinations: number; reason: string; products: Product[] };
@@ -14,16 +16,21 @@ export default function NextPurchasePage() {
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
     const fetchRecommendations = async () => {
-        const userId = localStorage.getItem("wearwise_user_id");
-        if (!userId) {
-            router.push("/profile");
+        const user = getStoredUser();
+        if (!user) {
+            router.push("/login");
             return;
         }
 
         setLoading(true);
         setError(false);
         try {
-            const response = await fetch(`http://localhost:8000/wardrobe/${userId}/next-purchase`);
+            const response = await fetch(
+                `${API_BASE_URL}/wardrobe/${user.id}/next-purchase`,
+                {
+                    headers: getAuthHeaders(),
+                }
+            );
             if (!response.ok) throw new Error("Failed to fetch recommendations");
             const data = await response.json();
             setRecommendations(data.recommendations || []);

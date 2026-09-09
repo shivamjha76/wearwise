@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { API_BASE_URL } from "@/lib/api";
+import { getStoredUser, getAuthHeaders } from "@/lib/auth";
 
 type Recommendation = {
     top: number;
@@ -43,9 +45,14 @@ export default function OutfitPage() {
             "wearwise_recommendation"
         );
 
-        const userId = localStorage.getItem("wearwise_user_id");
+        const user = getStoredUser();
 
-        if (!savedRecommendation || !userId) {
+        if (!user) {
+            router.push("/login");
+            return;
+        }
+
+        if (!savedRecommendation) {
             router.push("/style");
             return;
         }
@@ -55,7 +62,10 @@ export default function OutfitPage() {
         const fetchWardrobe = async () => {
             try {
                 const response = await fetch(
-                    `http://127.0.0.1:8000/wardrobe/${userId}`
+                    `${API_BASE_URL}/wardrobe/${user.id}`,
+                    {
+                        headers: getAuthHeaders(),
+                    }
                 );
 
                 if (!response.ok) {

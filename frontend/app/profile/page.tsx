@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { API_BASE_URL } from "@/lib/api";
+import { getStoredUser, getAuthHeaders } from "@/lib/auth";
 
 export default function ProfilePage() {
     const router = useRouter();
@@ -18,6 +20,47 @@ export default function ProfilePage() {
     });
 
     const [loading, setLoading] = useState(false);
+    const [fetchingProfile, setFetchingProfile] = useState(true);
+
+    useEffect(() => {
+        const user = getStoredUser();
+        if (!user) {
+            router.push("/login");
+            return;
+        }
+
+        setForm((prev) => ({
+            ...prev,
+            name: user.name,
+            email: user.email,
+        }));
+
+        const loadProfile = async () => {
+            try {
+                const res = await fetch(`${API_BASE_URL}/users/${user.id}/style-profile`, {
+                    headers: getAuthHeaders(),
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setForm((prev) => ({
+                        ...prev,
+                        height: String(data.height ?? ""),
+                        weight: String(data.weight ?? ""),
+                        skin_tone: data.skin_tone || prev.skin_tone,
+                        style_preference: data.style_preference || prev.style_preference,
+                        fit_preference: data.fit_preference || prev.fit_preference,
+                        budget: String(data.budget ?? ""),
+                    }));
+                }
+            } catch (err) {
+                console.error("Could not fetch existing style profile", err);
+            } finally {
+                setFetchingProfile(false);
+            }
+        };
+
+        loadProfile();
+    }, [router]);
 
     const handleChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -32,36 +75,18 @@ export default function ProfilePage() {
         e.preventDefault();
         setLoading(true);
 
+        const user = getStoredUser();
+        if (!user) {
+            router.push("/login");
+            return;
+        }
+
         try {
-            // 1. Create user
-            const userResponse = await fetch(
-                "http://127.0.0.1:8000/users/",
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        name: form.name,
-                        email: form.email,
-                    }),
-                }
-            );
-
-            if (!userResponse.ok) {
-                throw new Error("Failed to create user");
-            }
-
-            const user = await userResponse.json();
-
-            // 2. Create style profile
             const profileResponse = await fetch(
-                `http://127.0.0.1:8000/users/${user.id}/style-profile`,
+                `${API_BASE_URL}/users/${user.id}/style-profile`,
                 {
                     method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({
                         height: Number(form.height),
                         weight: Number(form.weight),
@@ -74,16 +99,13 @@ export default function ProfilePage() {
             );
 
             if (!profileResponse.ok) {
-                throw new Error("Failed to create style profile");
+                throw new Error("Failed to save style profile");
             }
 
-            localStorage.setItem("wearwise_user_id", user.id);
-
             router.push("/wardrobe");
-
         } catch (error) {
             console.error(error);
-            alert("Something went wrong. Make sure the backend is running.");
+            alert("Something went wrong saving your style profile.");
         } finally {
             setLoading(false);
         }

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { API_BASE_URL } from "@/lib/api";
+import { getStoredUser, getAuthHeaders } from "@/lib/auth";
 
 type WardrobeItem = {
     id: number;
@@ -182,16 +184,17 @@ export default function StylePage() {
     const [error, setError] = useState("");
 
     useEffect(() => {
-        if (!localStorage.getItem("wearwise_user_id")) {
-            router.push("/profile");
+        const user = getStoredUser();
+        if (!user) {
+            router.push("/login");
         }
     }, [router]);
 
     const generateOutfit = async () => {
-        const userId = localStorage.getItem("wearwise_user_id");
+        const user = getStoredUser();
 
-        if (!userId) {
-            router.push("/profile");
+        if (!user) {
+            router.push("/login");
             return;
         }
 
@@ -201,13 +204,16 @@ export default function StylePage() {
         try {
             const [outfitResponse, wardrobeResponse] = await Promise.all([
                 fetch(
-                    `http://127.0.0.1:8000/outfits/${userId}?occasion=${occasion}&style_vibe=${styleVibe}`,
+                    `${API_BASE_URL}/outfits/${user.id}?occasion=${occasion}&style_vibe=${styleVibe}`,
                     {
                         method: "POST",
+                        headers: getAuthHeaders(),
                     }
                 ),
 
-                fetch(`http://127.0.0.1:8000/wardrobe/${userId}`),
+                fetch(`${API_BASE_URL}/wardrobe/${user.id}`, {
+                    headers: getAuthHeaders(),
+                }),
             ]);
 
             if (!outfitResponse.ok) {

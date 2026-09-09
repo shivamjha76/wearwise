@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -7,6 +7,7 @@ from app.models.style_profile import StyleProfile
 from app.models.wardrobe import WardrobeItem
 from app.services.recommendation import generate_outfits
 from app.services.ai import explain_outfit
+from app.core.dependencies import get_current_user
 
 router = APIRouter(prefix="/outfits", tags=["Outfits"])
 
@@ -16,8 +17,14 @@ def get_outfits(
     user_id: int,
     occasion: str,
     style_vibe: str | None = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to generate outfits for this user"
+        )
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:

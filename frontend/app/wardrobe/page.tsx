@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { API_BASE_URL } from "@/lib/api";
+import { getStoredUser, getAuthHeaders, User } from "@/lib/auth";
 
 type WardrobeItem = {
     id: number;
@@ -19,6 +21,7 @@ export default function WardrobePage() {
 
     const [items, setItems] = useState<WardrobeItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
 
     const [form, setForm] = useState({
         category: "tshirt",
@@ -29,20 +32,13 @@ export default function WardrobePage() {
         image_url: "",
     });
 
-    const userId =
-        typeof window !== "undefined"
-            ? localStorage.getItem("wearwise_user_id")
-            : null;
-
-    const fetchWardrobe = async () => {
-        if (!userId) {
-            router.push("/profile");
-            return;
-        }
-
+    const fetchWardrobe = async (targetUserId: number) => {
         try {
             const response = await fetch(
-                `http://127.0.0.1:8000/wardrobe/${userId}`
+                `${API_BASE_URL}/wardrobe/${targetUserId}`,
+                {
+                    headers: getAuthHeaders(),
+                }
             );
 
             if (!response.ok) {
@@ -59,12 +55,14 @@ export default function WardrobePage() {
     };
 
     useEffect(() => {
-        const requestTimer = window.setTimeout(fetchWardrobe, 0);
-
-        return () => window.clearTimeout(requestTimer);
-        // fetchWardrobe reads the user ID stored by the profile flow on mount.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        const user = getStoredUser();
+        if (!user) {
+            router.push("/login");
+            return;
+        }
+        setCurrentUser(user);
+        fetchWardrobe(user.id);
+    }, [router]);
 
     const handleChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -78,16 +76,14 @@ export default function WardrobePage() {
     const addItem = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!userId) return;
+        if (!currentUser) return;
 
         try {
             const response = await fetch(
-                `http://127.0.0.1:8000/wardrobe/${userId}`,
+                `${API_BASE_URL}/wardrobe/${currentUser.id}`,
                 {
                     method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({
                         category: form.category,
                         color: form.color,
@@ -103,7 +99,7 @@ export default function WardrobePage() {
                 throw new Error("Failed to add item");
             }
 
-            await fetchWardrobe();
+            await fetchWardrobe(currentUser.id);
         } catch (error) {
             console.error(error);
             alert("Could not add clothing item.");
@@ -113,9 +109,10 @@ export default function WardrobePage() {
     const deleteItem = async (itemId: number) => {
         try {
             const response = await fetch(
-                `http://127.0.0.1:8000/wardrobe/${itemId}`,
+                `${API_BASE_URL}/wardrobe/${itemId}`,
                 {
                     method: "DELETE",
+                    headers: getAuthHeaders(),
                 }
             );
 
@@ -123,7 +120,9 @@ export default function WardrobePage() {
                 throw new Error("Failed to delete item");
             }
 
-            await fetchWardrobe();
+            if (currentUser) {
+                await fetchWardrobe(currentUser.id);
+            }
         } catch (error) {
             console.error(error);
         }

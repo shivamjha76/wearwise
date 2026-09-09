@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -8,6 +8,7 @@ from app.schemas.style_profile import (
     StyleProfileCreate,
     StyleProfileResponse
 )
+from app.core.dependencies import get_current_user
 
 
 router = APIRouter(
@@ -16,15 +17,46 @@ router = APIRouter(
 )
 
 
+@router.get(
+    "/{user_id}/style-profile",
+    response_model=StyleProfileResponse
+)
+def get_style_profile(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this style profile"
+        )
+
+    profile = db.query(StyleProfile).filter(StyleProfile.user_id == user_id).first()
+    if not profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Style profile not found"
+        )
+    return profile
+
+
 @router.post(
     "/{user_id}/style-profile",
     response_model=StyleProfileResponse
 )
-def create_style_profile(
+def create_or_update_style_profile(
     user_id: int,
     profile_data: StyleProfileCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to modify this style profile"
+        )
+
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
@@ -33,17 +65,27 @@ def create_style_profile(
             detail="User not found"
         )
 
-    profile = StyleProfile(
-        user_id=user_id,
-        height=profile_data.height,
-        weight=profile_data.weight,
-        skin_tone=profile_data.skin_tone,
-        style_preference=profile_data.style_preference,
-        fit_preference=profile_data.fit_preference,
-        budget=profile_data.budget
-    )
+    profile = db.query(StyleProfile).filter(StyleProfile.user_id == user_id).first()
 
-    db.add(profile)
+    if profile:
+        profile.height = profile_data.height
+        profile.weight = profile_data.weight
+        profile.skin_tone = profile_data.skin_tone
+        profile.style_preference = profile_data.style_preference
+        profile.fit_preference = profile_data.fit_preference
+        profile.budget = profile_data.budget
+    else:
+        profile = StyleProfile(
+            user_id=user_id,
+            height=profile_data.height,
+            weight=profile_data.weight,
+            skin_tone=profile_data.skin_tone,
+            style_preference=profile_data.style_preference,
+            fit_preference=profile_data.fit_preference,
+            budget=profile_data.budget
+        )
+        db.add(profile)
+
     db.commit()
     db.refresh(profile)
 

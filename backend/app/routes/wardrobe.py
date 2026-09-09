@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -10,6 +10,7 @@ from app.schemas.wardrobe import (
 )
 from app.services.wardrobe_gap import recommend_next_item
 from app.services.products import get_products_for_color
+from app.core.dependencies import get_current_user
 
 
 router = APIRouter(
@@ -25,8 +26,15 @@ router = APIRouter(
 def add_wardrobe_item(
     user_id: int,
     item_data: WardrobeItemCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to modify this wardrobe"
+        )
+
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
@@ -58,8 +66,15 @@ def add_wardrobe_item(
 )
 def get_wardrobe(
     user_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view this wardrobe"
+        )
+
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
@@ -78,6 +93,7 @@ def get_wardrobe(
 @router.delete("/{item_id}")
 def delete_wardrobe_item(
     item_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     item = (
@@ -88,8 +104,14 @@ def delete_wardrobe_item(
 
     if not item:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Wardrobe item not found"
+        )
+
+    if item.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to delete this wardrobe item"
         )
 
     db.delete(item)
@@ -98,9 +120,19 @@ def delete_wardrobe_item(
     return {
         "message": "Wardrobe item deleted successfully"
     }
-    
+
+
 @router.get("/{user_id}/next-purchase")
-def next_purchase(user_id: int, db: Session = Depends(get_db)):
+def next_purchase(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view recommendations for this user"
+        )
 
     user = db.query(User).filter(User.id == user_id).first()
 

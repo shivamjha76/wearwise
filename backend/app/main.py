@@ -7,6 +7,7 @@ from app.routes.users import router as user_router
 from app.routes.style_profiles import router as style_profile_router
 from app.routes.wardrobe import router as wardrobe_router
 from app.routes.outfits import router as outfit_router
+from app.routes.auth import router as auth_router
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -30,6 +31,7 @@ app.add_middleware(
 )
 
 
+app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(style_profile_router)
 app.include_router(wardrobe_router)
