@@ -388,13 +388,12 @@ export default function WardrobePage() {
         const uploadData = await uploadRes.json();
         finalImageUrl = uploadData.image_url;
 
-        if (uploadData.tags) {
-          if (uploadData.tags.category) finalCategory = uploadData.tags.category;
-          if (uploadData.tags.color) finalColor = uploadData.tags.color;
-          if (uploadData.tags.fit) finalFit = uploadData.tags.fit;
-          if (uploadData.tags.pattern) finalPattern = uploadData.tags.pattern;
-          if (uploadData.tags.style) finalStyle = uploadData.tags.style;
-        }
+        // User confirmed form.category and form.color take precedence
+        finalCategory = form.category || uploadData.tags?.category || "tshirt";
+        finalColor = form.color || uploadData.tags?.color || "black";
+        finalFit = form.fit || uploadData.tags?.fit || "regular";
+        finalPattern = form.pattern || uploadData.tags?.pattern || "solid";
+        finalStyle = form.style || uploadData.tags?.style || "casual";
       } else if (imageMode === "url") {
         const trimmedUrl = form.image_url.trim();
         if (!trimmedUrl) {
@@ -418,22 +417,22 @@ export default function WardrobePage() {
             });
             if (analyzeRes.ok) {
               const data = await analyzeRes.json();
-              if (data.category) finalCategory = data.category;
-              if (data.color) finalColor = data.color;
-              if (data.fit) finalFit = data.fit;
-              if (data.pattern) finalPattern = data.pattern;
-              if (data.style) finalStyle = data.style;
+              if (data.category && !form.category) finalCategory = data.category;
+              if (data.color && !form.color) finalColor = data.color;
+              if (data.fit && !form.fit) finalFit = data.fit;
+              if (data.pattern && !form.pattern) finalPattern = data.pattern;
+              if (data.style && !form.style) finalStyle = data.style;
             }
           } catch (e) {
             console.warn("Direct URL analyze during add failed, using form values:", e);
           }
-        } else {
-          finalCategory = aiDetectedInfo.category || form.category || "tshirt";
-          finalColor = aiDetectedInfo.color || form.color || "white";
-          finalFit = aiDetectedInfo.fit || form.fit || "regular";
-          finalPattern = form.pattern || "solid";
-          finalStyle = form.style || "casual";
         }
+
+        finalCategory = form.category || finalCategory || "tshirt";
+        finalColor = form.color || finalColor || "black";
+        finalFit = form.fit || finalFit || "regular";
+        finalPattern = form.pattern || "solid";
+        finalStyle = form.style || "casual";
       }
 
       const response = await fetch(`${API_BASE_URL}/wardrobe/${currentUser.id}`, {
@@ -755,8 +754,15 @@ export default function WardrobePage() {
                           const val = e.target.value;
                           setForm((prev) => ({ ...prev, image_url: val }));
                         }}
+                        onPaste={(e) => {
+                          const pasted = e.clipboardData.getData("text").trim();
+                          if (pasted.startsWith("http://") || pasted.startsWith("https://")) {
+                            setForm((prev) => ({ ...prev, image_url: pasted }));
+                            setTimeout(() => analyzeUrl(pasted), 50);
+                          }
+                        }}
                         onBlur={(e) => {
-                          if (e.target.value.trim().startsWith("http")) {
+                          if (e.target.value.trim().startsWith("http") && !aiDetectedInfo) {
                             analyzeUrl(e.target.value);
                           }
                         }}
@@ -825,6 +831,88 @@ export default function WardrobePage() {
                       />
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Category & Color Confirmation / Selection */}
+              {(previewUrl || (imageMode === "url" && form.image_url.trim())) && (
+                <div className="space-y-3 rounded-2xl border border-[#e2e4e7] bg-[#fbfbf9] p-3.5 transition animate-pop-in">
+                  <div>
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-gray-700">
+                        Category
+                      </span>
+                      <span className="text-[10px] text-gray-400">Tap to confirm or change</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[
+                        { id: "tshirt", label: "👕 T-Shirt" },
+                        { id: "shirt", label: "👔 Shirt" },
+                        { id: "jeans", label: "👖 Jeans" },
+                        { id: "pants", label: "🩳 Pants" },
+                        { id: "shoes", label: "👞 Shoes" },
+                        { id: "sneakers", label: "👟 Sneakers" },
+                      ].map((cat) => {
+                        const isSelected = (form.category || "tshirt") === cat.id;
+                        return (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => setForm((prev) => ({ ...prev, category: cat.id }))}
+                            className={`rounded-xl px-2 py-2 text-xs font-semibold transition cursor-pointer border text-center flex items-center justify-center gap-1 ${
+                              isSelected
+                                ? "border-black bg-black text-white shadow-xs font-bold scale-[1.02]"
+                                : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+                            }`}
+                          >
+                            {cat.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-[#eceef0] pt-2.5">
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-gray-700">
+                        Color: <span className="capitalize font-extrabold text-black">{form.color || "black"}</span>
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        { id: "black", bg: "#171717" },
+                        { id: "white", bg: "#ffffff" },
+                        { id: "grey", bg: "#9ca3af" },
+                        { id: "beige", bg: "#d4c5a9" },
+                        { id: "blue", bg: "#2563eb" },
+                        { id: "green", bg: "#16a34a" },
+                        { id: "olive", bg: "#556b2f" },
+                        { id: "brown", bg: "#78350f" },
+                        { id: "maroon", bg: "#881337" },
+                      ].map((c) => {
+                        const isSelected = (form.color || "black") === c.id;
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => setForm((prev) => ({ ...prev, color: c.id }))}
+                            title={c.id}
+                            className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] capitalize transition cursor-pointer border ${
+                              isSelected
+                                ? "border-black ring-1 ring-black font-bold shadow-xs bg-white text-black"
+                                : "border-gray-200 bg-white hover:bg-gray-50 text-gray-600"
+                            }`}
+                          >
+                            <span
+                              className="h-2.5 w-2.5 rounded-full border border-black/20 shrink-0"
+                              style={{ backgroundColor: c.bg }}
+                            />
+                            <span>{c.id}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               )}
 

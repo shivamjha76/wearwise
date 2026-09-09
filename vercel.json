@@ -43,7 +43,13 @@
       }
     },
     {
-      "source": "/wardrobe/:userId(\\d+)(.*)",
+      "source": "/wardrobe/analyze-url",
+      "destination": {
+        "service": "backend"
+      }
+    },
+    {
+      "source": "/wardrobe/:id(\\d+)(.*)",
       "destination": {
         "service": "backend"
       }

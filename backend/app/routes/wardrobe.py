@@ -133,27 +133,45 @@ def analyze_clothing_url(
         )
 
     try:
-        import requests
+        content = None
+        content_type = "image/jpeg"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         }
-        resp = requests.get(url, headers=headers, timeout=15)
-        if resp.status_code != 200:
+        try:
+            import requests
+            resp = requests.get(url, headers=headers, timeout=15)
+            if resp.status_code == 200:
+                content = resp.content
+                content_type = resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Could not load image from URL (HTTP {resp.status_code})"
+                )
+        except ImportError:
+            import urllib.request
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as u_resp:
+                content = u_resp.read()
+                content_type = u_resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
+
+        if not content:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Could not load image from URL (HTTP {resp.status_code})"
+                detail="Empty response received from image URL"
             )
 
-        content = resp.content
         if len(content) > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Image size exceeds 10MB limit"
             )
 
-        content_type = resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
         filename = Path(url.split("?")[0]).name or "garment.jpg"
+        if not any(filename.lower().endswith(ext) for ext in ALLOWED_EXTENSIONS):
+            filename += ".jpg"
 
         analysis = analyze_garment_image(
             image_bytes=content,
