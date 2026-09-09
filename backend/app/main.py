@@ -29,6 +29,10 @@ def init_db():
                 cols = [c["name"] for c in inspector.get_columns("users")]
                 if "avatar_url" not in cols:
                     conn.execute(text("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500)"))
+            if "style_profiles" in inspector.get_table_names():
+                sp_cols = [c["name"] for c in inspector.get_columns("style_profiles")]
+                if "gender" not in sp_cols:
+                    conn.execute(text("ALTER TABLE style_profiles ADD COLUMN gender VARCHAR(50)"))
     except Exception as e:
         print(f"Warning: Database metadata initialization error: {e}")
 

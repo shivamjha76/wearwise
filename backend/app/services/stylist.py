@@ -740,9 +740,11 @@ def get_stylist_reply(
     ]
     inventory_text = "\n".join(inventory_lines) if inventory_lines else "Wardrobe vault is currently empty."
 
+    gender_val = getattr(profile, 'gender', None)
     profile_desc = (
+        f"- Gender Identity: {gender_val.title() if gender_val else 'Unspecified'}\n"
         f"- Height: {getattr(profile, 'height', 'N/A')} cm, Weight: {getattr(profile, 'weight', 'N/A')} kg\n"
-        f"- Skin Tone: {getattr(profile, 'skin_tone', 'medium')}\n"
+        f"- Skin Tone: {getattr(profile, 'skin_tone', 'N/A')}\n"
         f"- Preferred Style: {getattr(profile, 'style_preference', 'casual')}\n"
         f"- Preferred Fit: {getattr(profile, 'fit_preference', 'regular')}"
         if profile else "Profile not yet filled."

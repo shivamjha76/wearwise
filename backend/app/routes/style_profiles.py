@@ -70,19 +70,25 @@ def create_or_update_style_profile(
     if profile:
         profile.height = profile_data.height
         profile.weight = profile_data.weight
+        if profile_data.gender is not None:
+            profile.gender = profile_data.gender
         if profile_data.skin_tone is not None:
             profile.skin_tone = profile_data.skin_tone
-        profile.style_preference = profile_data.style_preference
-        profile.fit_preference = profile_data.fit_preference
-        profile.budget = profile_data.budget
+        if profile_data.style_preference is not None:
+            profile.style_preference = profile_data.style_preference
+        if profile_data.fit_preference is not None:
+            profile.fit_preference = profile_data.fit_preference
+        if profile_data.budget is not None:
+            profile.budget = profile_data.budget
     else:
         profile = StyleProfile(
             user_id=user_id,
             height=profile_data.height,
             weight=profile_data.weight,
+            gender=profile_data.gender,
             skin_tone=profile_data.skin_tone,
-            style_preference=profile_data.style_preference,
-            fit_preference=profile_data.fit_preference,
+            style_preference=profile_data.style_preference or "casual",
+            fit_preference=profile_data.fit_preference or "regular",
             budget=profile_data.budget
         )
         db.add(profile)

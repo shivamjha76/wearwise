@@ -13,14 +13,11 @@ const SKIN_TONES = [
   { value: "deep", label: "Deep", hex: "#7d5537" },
 ] as const;
 
-const STYLE_OPTIONS = [
-  { value: "casual", label: "Casual", icon: "☕", desc: "Relaxed daily comfort" },
-  { value: "minimal", label: "Minimal", icon: "♧", desc: "Clean & understated" },
-  { value: "streetwear", label: "Streetwear", icon: "⚡", desc: "Modern expressive energy" },
-  { value: "formal", label: "Formal", icon: "✦", desc: "Sharp tailored polish" },
+const GENDER_OPTIONS = [
+  { value: "male", label: "Male", icon: "👨", desc: "Men's style & silhouettes" },
+  { value: "female", label: "Female", icon: "👩", desc: "Women's style & silhouettes" },
+  { value: "unisex", label: "Non-Binary / Unisex", icon: "✨", desc: "Fluid & gender-neutral style" },
 ] as const;
-
-const FIT_OPTIONS = ["regular", "oversized", "relaxed", "slim"] as const;
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -28,12 +25,12 @@ export default function ProfilePage() {
   const [form, setForm] = useState({
     name: "",
     email: "",
+    gender: "male",
     height: "",
     weight: "",
     skin_tone: "",
     style_preference: "casual",
     fit_preference: "regular",
-    budget: "",
   });
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -100,12 +97,12 @@ export default function ProfilePage() {
           const data = await res.json();
           setForm((prev) => ({
             ...prev,
-            height: String(data.height ?? ""),
-            weight: String(data.weight ?? ""),
+            gender: data.gender || prev.gender,
+            height: data.height != null ? String(data.height) : "",
+            weight: data.weight != null ? String(data.weight) : "",
             skin_tone: data.skin_tone || prev.skin_tone,
             style_preference: data.style_preference || prev.style_preference,
             fit_preference: data.fit_preference || prev.fit_preference,
-            budget: String(data.budget ?? ""),
           }));
         }
       } catch (err) {
@@ -235,12 +232,12 @@ export default function ProfilePage() {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({
-          height: Number(form.height),
-          weight: Number(form.weight),
+          height: form.height ? Number(form.height) : null,
+          weight: form.weight ? Number(form.weight) : null,
+          gender: form.gender || null,
           skin_tone: form.skin_tone || null,
-          style_preference: form.style_preference,
-          fit_preference: form.fit_preference,
-          budget: Number(form.budget),
+          style_preference: form.style_preference || "casual",
+          fit_preference: form.fit_preference || "regular",
         }),
       });
 
@@ -380,9 +377,6 @@ export default function ProfilePage() {
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Upload a portrait picture (JPG, PNG or WebP, up to 5MB).
-                </p>
 
                 <div className="mt-2 flex items-center gap-2">
                   {currentToneObj ? (
@@ -469,13 +463,60 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Section 2: Proportions & Budget */}
+          {/* Section 2: Gender Identity */}
+          <div>
+            <div className="flex items-center justify-between border-b border-[#eceef0] pb-2.5">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-900">
+                2. Gender Identity
+              </h2>
+              <span className="text-xs font-semibold text-gray-500 capitalize">
+                Selected: {GENDER_OPTIONS.find((g) => g.value === form.gender)?.label || form.gender}
+              </span>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {GENDER_OPTIONS.map((gender) => {
+                const isSelected = form.gender === gender.value;
+                return (
+                  <button
+                    key={gender.value}
+                    type="button"
+                    onClick={() => setForm({ ...form, gender: gender.value })}
+                    className={`flex items-center sm:flex-col sm:items-start gap-3.5 p-4 rounded-2xl border transition-all cursor-pointer text-left ${
+                      isSelected
+                        ? "border-black bg-[#171717] text-white shadow-md ring-1 ring-black"
+                        : "border-gray-200 bg-[#fbfbf9] text-gray-900 hover:border-gray-400 hover:bg-white"
+                    }`}
+                  >
+                    <span className="text-2xl sm:text-3xl">{gender.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs sm:text-sm font-bold">{gender.label}</span>
+                        {isSelected && (
+                          <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                        )}
+                      </div>
+                      <p
+                        className={`text-[11px] mt-0.5 line-clamp-1 ${
+                          isSelected ? "text-gray-300" : "text-gray-500"
+                        }`}
+                      >
+                        {gender.desc}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Section 3: Body Proportions */}
           <div>
             <h2 className="text-sm font-bold uppercase tracking-wider text-gray-900 border-b border-[#eceef0] pb-2.5">
-              2. Body Proportions & Budget
+              3. Body Proportions
             </h2>
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700">
                   Height
@@ -487,7 +528,6 @@ export default function ProfilePage() {
                     placeholder="175"
                     value={form.height}
                     onChange={handleChange}
-                    required
                     className="w-full rounded-xl border border-[#e2e4e7] bg-[#fbfbf9] py-3 pl-4 pr-12 text-xs sm:text-sm text-gray-900 outline-none transition focus:border-black focus:bg-white focus:ring-1 focus:ring-black"
                   />
                   <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">
@@ -507,161 +547,12 @@ export default function ProfilePage() {
                     placeholder="68"
                     value={form.weight}
                     onChange={handleChange}
-                    required
                     className="w-full rounded-xl border border-[#e2e4e7] bg-[#fbfbf9] py-3 pl-4 pr-12 text-xs sm:text-sm text-gray-900 outline-none transition focus:border-black focus:bg-white focus:ring-1 focus:ring-black"
                   />
                   <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">
                     kg
                   </span>
                 </div>
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700">
-                  Shopping Budget
-                </label>
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">
-                    ₹
-                  </span>
-                  <input
-                    name="budget"
-                    type="number"
-                    placeholder="5000"
-                    value={form.budget}
-                    onChange={handleChange}
-                    required
-                    className="w-full rounded-xl border border-[#e2e4e7] bg-[#fbfbf9] py-3 pl-8 pr-4 text-xs sm:text-sm text-gray-900 outline-none transition focus:border-black focus:bg-white focus:ring-1 focus:ring-black"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Section 3: AI Skin Tone Calibration (Read-Only AI Calibrated) */}
-          <div>
-            <div className="flex items-center justify-between border-b border-[#eceef0] pb-2.5">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-900">
-                  3. Skin Tone Calibration
-                </h2>
-                <span className="inline-flex items-center gap-1 rounded-md bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-neutral-600 border border-neutral-200 select-none">
-                  🔒 AI Auto-Calibrated
-                </span>
-              </div>
-              {currentToneObj && (
-                <span className="text-xs font-bold text-emerald-800">
-                  Detected: {currentToneObj.label}
-                </span>
-              )}
-            </div>
-
-            <p className="mt-2 text-xs text-gray-500">
-              Skin tone is analyzed and calibrated automatically by AI from your portrait photo. Manual editing is disabled.
-            </p>
-
-            <div className="mt-4">
-              {currentToneObj ? (
-                <div className="flex items-center justify-between p-4 rounded-2xl border border-neutral-200 bg-gradient-to-r from-[#fafaf8] via-white to-[#fafaf8] shadow-2xs">
-                  <div className="flex items-center gap-3.5">
-                    <span
-                      className="h-10 w-10 rounded-full border-2 border-white shadow-md shrink-0 ring-2 ring-black/5"
-                      style={{ backgroundColor: currentToneObj.hex }}
-                    />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-bold text-gray-950">
-                          {currentToneObj.label} Complexion
-                        </p>
-                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
-                          Active
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Calibrated from your portrait photo. Upload a new photo above to recalibrate automatically.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3.5 p-4 rounded-2xl border border-dashed border-amber-300 bg-amber-50/60 text-amber-900">
-                  <span className="text-2xl select-none">⚠️</span>
-                  <div>
-                    <p className="text-xs font-bold text-amber-950">
-                      Skin Tone: Not Detected / Undefined
-                    </p>
-                    <p className="text-[11px] text-amber-800 mt-0.5">
-                      Upload a portrait photo above with your face clearly visible to automatically detect your skin tone.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Section 4: Style & Fit Preferences */}
-          <div>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-gray-900 border-b border-[#eceef0] pb-2.5">
-              4. Style Vibe & Fit Preference
-            </h2>
-
-            {/* Style Cards */}
-            <div className="mt-4">
-              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-gray-700">
-                Preferred Aesthetic
-              </label>
-              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-                {STYLE_OPTIONS.map((style) => {
-                  const isSelected = form.style_preference === style.value;
-                  return (
-                    <button
-                      key={style.value}
-                      type="button"
-                      onClick={() => setForm({ ...form, style_preference: style.value })}
-                      className={`flex flex-col items-start rounded-2xl border p-3 text-left transition-all cursor-pointer ${
-                        isSelected
-                          ? "border-black bg-[#171717] text-white shadow-xs"
-                          : "border-gray-200 bg-[#fbfbf9] text-gray-900 hover:border-gray-400 hover:bg-white"
-                      }`}
-                    >
-                      <span className="text-lg">{style.icon}</span>
-                      <span className="mt-2 text-xs font-bold">{style.label}</span>
-                      <span
-                        className={`mt-0.5 text-[10px] line-clamp-1 ${
-                          isSelected ? "text-gray-300" : "text-gray-500"
-                        }`}
-                      >
-                        {style.desc}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Fit Segmented Control */}
-            <div className="mt-5">
-              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-gray-700">
-                Preferred Silhouette / Fit
-              </label>
-              <div className="grid grid-cols-4 gap-1.5 rounded-xl bg-[#f4f5f6] p-1">
-                {FIT_OPTIONS.map((fit) => {
-                  const isSelected = form.fit_preference === fit;
-                  return (
-                    <button
-                      key={fit}
-                      type="button"
-                      onClick={() => setForm({ ...form, fit_preference: fit })}
-                      className={`rounded-lg py-2 text-center text-xs font-semibold capitalize transition-all cursor-pointer ${
-                        isSelected
-                          ? "bg-white text-black shadow-2xs"
-                          : "text-gray-500 hover:text-black"
-                      }`}
-                    >
-                      {fit}
-                    </button>
-                  );
-                })}
               </div>
             </div>
           </div>
@@ -676,11 +567,11 @@ export default function ProfilePage() {
               {loading ? (
                 <>
                   <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  <span>Saving Style DNA...</span>
+                  <span>Saving Profile...</span>
                 </>
               ) : (
                 <>
-                  <span>Save Style DNA & Go to Wardrobe</span>
+                  <span>Save Profile & Go to Wardrobe</span>
                   <span>→</span>
                 </>
               )}

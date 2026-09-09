@@ -6,6 +6,7 @@ export interface User {
   email: string;
   avatar_url?: string | null;
   skin_tone?: string | null;
+  gender?: string | null;
 }
 
 export interface AuthResponse {

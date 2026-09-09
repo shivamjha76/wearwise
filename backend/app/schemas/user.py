@@ -12,6 +12,7 @@ class UserResponse(BaseModel):
     email: str
     avatar_url: str | None = None
     skin_tone: str | None = None
+    gender: str | None = None
 
     class Config:
         from_attributes = True

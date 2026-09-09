@@ -18,6 +18,7 @@ class StyleProfile(Base):
 
     height = Column(Float)
     weight = Column(Float)
+    gender = Column(String(50), nullable=True)
     skin_tone = Column(String(50))
     style_preference = Column(String(100))
     fit_preference = Column(String(50))

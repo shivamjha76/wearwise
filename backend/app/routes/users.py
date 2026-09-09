@@ -28,6 +28,7 @@ def get_user_profile(
     """Retrieve the authenticated user's profile details with skin tone."""
     profile = db.query(StyleProfile).filter(StyleProfile.user_id == current_user.id).first()
     current_user.skin_tone = profile.skin_tone if profile else None
+    current_user.gender = profile.gender if profile else None
     return current_user
 
 
@@ -116,6 +117,7 @@ async def upload_profile_picture(
     db.refresh(current_user)
 
     current_user.skin_tone = detected_tone
+    current_user.gender = profile.gender if profile else None
     return current_user
 
 
@@ -146,6 +148,7 @@ def remove_profile_picture(
     db.refresh(current_user)
 
     current_user.skin_tone = None
+    current_user.gender = profile.gender if profile else None
     return current_user
 
 
