@@ -31,6 +31,66 @@ const FEMALE_BUST_PRESETS = ["30", "32", "34", "36", "38", "40", "42", "44"];
 const FEMALE_WAIST_PRESETS = ["26", "28", "30", "32", "34", "36", "38", "40"];
 const FEMALE_HIP_PRESETS = ["32", "34", "36", "38", "40", "42", "44", "46"];
 
+// 4-word animated taglines with typewriter effect
+const TAGLINES = [
+  "Craft your signature look.",
+  "Your style, tailored effortlessly.",
+  "Wear your true confidence.",
+  "Dress smarter, live bolder.",
+];
+
+function AnimatedTagline() {
+  const [index, setIndex] = useState(0);
+  const [subIndex, setSubIndex] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+
+  useEffect(() => {
+    if (isPaused) {
+      const pauseTimer = setTimeout(() => {
+        setIsPaused(false);
+        setIsDeleting(true);
+      }, 2200);
+      return () => clearTimeout(pauseTimer);
+    }
+
+    if (isDeleting) {
+      if (subIndex === 0) {
+        setIsDeleting(false);
+        setIndex((prev) => (prev + 1) % TAGLINES.length);
+        return;
+      }
+      const deleteTimer = setTimeout(() => {
+        setSubIndex((prev) => prev - 1);
+      }, 35);
+      return () => clearTimeout(deleteTimer);
+    }
+
+    if (subIndex === TAGLINES[index].length) {
+      setIsPaused(true);
+      return;
+    }
+
+    const typeTimer = setTimeout(() => {
+      setSubIndex((prev) => prev + 1);
+    }, 75);
+
+    return () => clearTimeout(typeTimer);
+  }, [subIndex, index, isDeleting, isPaused]);
+
+  return (
+    <div className="mt-2.5 flex items-center min-h-[28px]">
+      <p className="text-sm sm:text-base font-medium text-gray-500 tracking-tight flex items-center gap-1.5">
+        <span className="text-neutral-400 text-xs sm:text-sm">✨</span>
+        <span className="text-neutral-900 font-semibold tracking-tight">
+          {TAGLINES[index].substring(0, subIndex)}
+        </span>
+        <span className="inline-block w-[2px] h-4 sm:h-[18px] bg-black align-middle animate-pulse" />
+      </p>
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const router = useRouter();
 
@@ -380,16 +440,11 @@ export default function ProfilePage() {
       <div className="mx-auto max-w-4xl">
         
         {/* ================= HEADER ================= */}
-        <div className="mb-8 border-b border-[#e2e4e7] pb-8">
+        <div className="mb-8 border-b border-[#e2e4e7] pb-6">
           <h1 className="text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">
             Your Style Identity
           </h1>
-          <div className="mt-3 max-w-2xl text-xs sm:text-sm text-gray-600 leading-relaxed space-y-1">
-            <p>Discover your signature aesthetic and elevate your everyday wardrobe with effortless confidence.</p>
-            <p>Fine-tune your personal dimensions, body proportions, and fit preferences to perfection.</p>
-            <p>Let our AI stylist craft bespoke, head-turning outfit combinations tailored exclusively for you.</p>
-            <p>Wear what fits your personality, your lifestyle, and your individuality.</p>
-          </div>
+          <AnimatedTagline />
         </div>
 
         {/* ================= PROFILE FORM CONTAINER ================= */}
