@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
 from app.models import User, StyleProfile, WardrobeItem
+from app.models.outfit import SavedOutfit
 from app.core.storage import get_upload_dir
 
 from app.routes.users import router as user_router
@@ -17,11 +18,15 @@ from app.routes.stylist import router as stylist_router
 from app.routes.weather import router as weather_router
 
 
-# Auto-create tables on launch (non-blocking if already created)
-try:
-    Base.metadata.create_all(bind=engine)
-except Exception as e:
-    print(f"Warning: Database metadata initialization error: {e}")
+def init_db():
+    """Auto-create tables on launch or on-demand."""
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        print(f"Warning: Database metadata initialization error: {e}")
+
+
+init_db()
 
 UPLOAD_DIR = get_upload_dir()
 
@@ -121,6 +126,7 @@ def health():
 @app.get("/debug-status")
 def debug_status():
     from sqlalchemy import inspect
+    init_db()
     tables = []
     db_err = None
     try:
@@ -129,10 +135,13 @@ def debug_status():
     except Exception as e:
         db_err = str(e)
 
+    url_str = str(engine.url)
+    safe_url = url_str.split("@")[-1] if "@" in url_str else url_str
+
     return {
         "vercel": bool(os.getenv("VERCEL")),
-        "database_type": "postgres" if (os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")) else "sqlite",
-        "has_database_url": bool(os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")),
+        "database_backend": engine.url.get_backend_name(),
+        "database_target": safe_url,
         "tables": tables,
         "db_error": db_err,
     }

@@ -20,7 +20,10 @@ def build_database_url():
         # SQLAlchemy 1.4+ requires postgresql:// instead of postgres://
         if raw_url.startswith("postgres://"):
             raw_url = raw_url.replace("postgres://", "postgresql://", 1)
-        return raw_url
+        if os.getenv("VERCEL") and ("@localhost" in raw_url or "@127.0.0.1" in raw_url):
+            raw_url = None
+        else:
+            return raw_url
 
     # 2. Individual database connection parameters
     db_user = os.getenv("DATABASE_USER")
@@ -28,6 +31,10 @@ def build_database_url():
     db_host = os.getenv("DATABASE_HOST")
     db_port = os.getenv("DATABASE_PORT")
     db_name = os.getenv("DATABASE_NAME")
+
+    # On Vercel, localhost/127.0.0.1 PostgreSQL cannot be reached
+    if os.getenv("VERCEL") and db_host in ("localhost", "127.0.0.1"):
+        db_host = None
 
     if all([db_user, db_password, db_host, db_port, db_name]):
         return (
