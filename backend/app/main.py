@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
@@ -51,6 +51,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    tb = traceback.format_exc()
+    print(f"Server Error on {request.url.path}: {tb}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc), "traceback": tb}
+    )
 
 
 @app.middleware("http")
@@ -104,4 +115,24 @@ def root():
 def health():
     return {
         "status": "healthy"
+    }
+
+
+@app.get("/debug-status")
+def debug_status():
+    from sqlalchemy import inspect
+    tables = []
+    db_err = None
+    try:
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+    except Exception as e:
+        db_err = str(e)
+
+    return {
+        "vercel": bool(os.getenv("VERCEL")),
+        "database_type": "postgres" if (os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")) else "sqlite",
+        "has_database_url": bool(os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")),
+        "tables": tables,
+        "db_error": db_err,
     }
