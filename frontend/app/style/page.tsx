@@ -81,17 +81,6 @@ const COLOR_MAP: Record<string, string> = {
   maroon: "#881337",
 };
 
-function getItemRole(category: string): "Top" | "Bottom" | "Footwear" {
-  const value = category.toLowerCase();
-  if (value === "jeans" || value === "pants" || value === "trousers" || value === "bottom") {
-    return "Bottom";
-  }
-  if (value === "shoes" || value === "sneakers" || value === "loafers" || value === "boots") {
-    return "Footwear";
-  }
-  return "Top";
-}
-
 function GarmentCard({ item, role }: { item: WardrobeItem; role: string }) {
   const hex = COLOR_MAP[item.color.toLowerCase()] || "#9ca3af";
 
@@ -694,7 +683,7 @@ export default function StylePage() {
                 {/* Saved Notification */}
                 {saveStatus === "saved" && (
                   <div className="mt-5 flex items-center justify-between rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-xs text-emerald-900">
-                    <span className="font-semibold">✓ Successfully saved to your Lookbook!</span>
+                    <span className="font-semibold">{saveMessage || "✓ Successfully saved to your Lookbook!"}</span>
                     <Link href="/saved" className="font-bold underline hover:text-emerald-950">
                       View Lookbook →
                     </Link>

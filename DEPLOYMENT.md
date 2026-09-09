@@ -32,8 +32,8 @@ git push origin main
 
 ### Step 3: Project Settings
 - **Project Name**: `wearwise` (or your preferred name)
-- **Framework Preset**: `Next.js` (automatically detected)
-- **Root Directory**: Leave as `./` (default project root)
+- **Framework Preset**: Automatically detected / `Next.js` / `Other`
+- **Root Directory**: Keep as `./` (**Project Root** - ⚠️ *Do NOT set this to `frontend` or Vercel won't be able to run `vercel.json` services and backend!*)
 
 ### Step 4: Add Environment Variables
 Open the **Environment Variables** accordion and add:

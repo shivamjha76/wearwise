@@ -7,7 +7,8 @@
     },
     "backend": {
       "root": "backend",
-      "framework": "fastapi"
+      "framework": "fastapi",
+      "entrypoint": "main:app"
     }
   },
   "rewrites": [
@@ -30,7 +31,19 @@
       }
     },
     {
-      "source": "/wardrobe/(.*)",
+      "source": "/wardrobe/upload",
+      "destination": {
+        "service": "backend"
+      }
+    },
+    {
+      "source": "/wardrobe/analyze",
+      "destination": {
+        "service": "backend"
+      }
+    },
+    {
+      "source": "/wardrobe/:userId(\\d+)(.*)",
       "destination": {
         "service": "backend"
       }
@@ -42,7 +55,25 @@
       }
     },
     {
-      "source": "/stylist/(.*)",
+      "source": "/stylist/chat",
+      "destination": {
+        "service": "backend"
+      }
+    },
+    {
+      "source": "/stylist/status",
+      "destination": {
+        "service": "backend"
+      }
+    },
+    {
+      "source": "/stylist/api-key",
+      "destination": {
+        "service": "backend"
+      }
+    },
+    {
+      "source": "/stylist/engines",
       "destination": {
         "service": "backend"
       }

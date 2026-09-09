@@ -372,9 +372,16 @@ export default function StylistPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#171717] text-base text-white shadow-2xs">
               ✦
             </div>
-            <h1 className="text-base font-extrabold tracking-tight text-[#1a1714] sm:text-lg">
-              WearWise Stylist
-            </h1>
+            <div>
+              <h1 className="text-base font-extrabold tracking-tight text-[#1a1714] sm:text-lg">
+                WearWise Stylist
+              </h1>
+              {engineInfo && (
+                <p className="text-[10px] font-medium text-gray-500">
+                  Powered by {engineInfo.label}
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
