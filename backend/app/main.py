@@ -57,7 +57,9 @@ app.add_middleware(
 async def handle_api_prefix(request, call_next):
     """Allows endpoints to be reached with or without '/api' prefix seamlessly on Vercel."""
     path = request.scope.get("path", "")
-    if path.startswith("/api/"):
+    if path in ("/api/index.py", "/index.py", "/main.py"):
+        request.scope["path"] = "/"
+    elif path.startswith("/api/"):
         request.scope["path"] = path[4:]
     elif path == "/api":
         request.scope["path"] = "/"
