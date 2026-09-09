@@ -48,7 +48,11 @@ def register(
     db.refresh(new_user)
 
     # Generate JWT token
-    token = create_access_token({"sub": str(new_user.id), "email": new_user.email})
+    token = create_access_token({
+        "sub": str(new_user.id),
+        "email": new_user.email,
+        "name": new_user.name
+    })
 
     return {
         "access_token": token,
@@ -76,7 +80,11 @@ def login(
             detail="Invalid email or password"
         )
 
-    token = create_access_token({"sub": str(user.id), "email": user.email})
+    token = create_access_token({
+        "sub": str(user.id),
+        "email": user.email,
+        "name": user.name
+    })
 
     return {
         "access_token": token,

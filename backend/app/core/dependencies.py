@@ -49,6 +49,27 @@ def get_current_user(
 
     user = db.query(User).filter(User.id == user_id_int).first()
     if not user:
+        email = payload.get("email")
+        if email:
+            user = db.query(User).filter(User.email == email.lower().strip()).first()
+
+        if not user and email:
+            # Serverless container recycled: auto-restore user from verified signed JWT
+            user_name = payload.get("name") or email.split("@")[0].replace(".", " ").title()
+            user = User(
+                id=user_id_int,
+                name=user_name,
+                email=email.lower().strip(),
+            )
+            try:
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+            except Exception:
+                db.rollback()
+                user = db.query(User).filter(User.email == email.lower().strip()).first()
+
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",

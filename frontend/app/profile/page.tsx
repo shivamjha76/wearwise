@@ -86,6 +86,10 @@ export default function ProfilePage() {
           if (token) {
             setSession(token, freshUser);
           }
+        } else if (userRes.status === 401) {
+          clearSession();
+          router.push("/login");
+          return;
         }
 
         // 2. Fetch style profile
