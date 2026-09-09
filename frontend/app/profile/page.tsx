@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL, getImageUrl } from "@/lib/api";
 import { getStoredUser, getAuthHeaders, setSession, getStoredToken, clearSession, User } from "@/lib/auth";
@@ -382,34 +381,14 @@ export default function ProfilePage() {
         
         {/* ================= HEADER ================= */}
         <div className="mb-8 border-b border-[#e2e4e7] pb-8">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#dedad0] bg-white/90 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#45546a] shadow-2xs backdrop-blur-md">
-                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Style DNA Studio</span>
-              </div>
-              <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">
-                Your Style Identity
-              </h1>
-              <p className="mt-1 max-w-xl text-xs sm:text-sm text-gray-600">
-                Calibrate your physical proportions and aesthetic preferences for precision outfit matchmaking.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              <Link
-                href="/wardrobe"
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-[#d4d6da] bg-white px-4 text-xs font-semibold text-gray-800 shadow-2xs transition hover:bg-gray-50 active:scale-95"
-              >
-                <span>👕 Wardrobe Vault</span>
-              </Link>
-              <Link
-                href="/saved"
-                className="inline-flex h-11 items-center justify-center rounded-xl bg-white border border-[#d4d6da] px-4 text-xs font-semibold text-gray-800 shadow-2xs transition hover:bg-gray-50 active:scale-95"
-              >
-                <span>★ Lookbook</span>
-              </Link>
-            </div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">
+            Your Style Identity
+          </h1>
+          <div className="mt-3 max-w-2xl text-xs sm:text-sm text-gray-600 leading-relaxed space-y-1">
+            <p>Discover your signature aesthetic and elevate your everyday wardrobe with effortless confidence.</p>
+            <p>Fine-tune your personal dimensions, body proportions, and fit preferences to perfection.</p>
+            <p>Let our AI stylist craft bespoke, head-turning outfit combinations tailored exclusively for you.</p>
+            <p>Wear what fits your personality, your lifestyle, and your individuality.</p>
           </div>
         </div>
 
