@@ -50,29 +50,34 @@ def get_outfits(
             status_code=400, detail="Not enough wardrobe items to generate an outfit"
         )
 
-    best = outfits[0]
-    top = best["top"]
-    bottom = best["bottom"]
-    shoes = best["shoes"]
+    recommendations = []
+    for o in outfits[:3]:
+        o_top = o["top"]
+        o_bottom = o["bottom"]
+        o_shoes = o["shoes"]
+        try:
+            o_explanation = explain_outfit(o_top, o_bottom, o_shoes, profile, occasion, weather)
+        except Exception:
+            o_explanation = "AI explanation unavailable"
 
-    try:
-        explanation = explain_outfit(top, bottom, shoes, profile, occasion, weather)
-    except Exception as exc:
-        print(repr(exc))
-        explanation = "AI explanation unavailable"
+        recommendations.append({
+            "top_id": o_top.id,
+            "bottom_id": o_bottom.id,
+            "shoes_id": o_shoes.id,
+            "score": o["score"],
+            "explanation": o_explanation,
+        })
+
+    best_rec = recommendations[0]
 
     return {
         "user_id": user_id,
         "occasion": occasion,
         "style_vibe": style_vibe,
         "weather": weather,
-        "recommendation": {
-            "top_id": best["top"].id,
-            "bottom_id": best["bottom"].id,
-            "shoes_id": best["shoes"].id,
-            "score": best["score"],
-        },
-        "explanation": explanation,
+        "recommendation": best_rec,
+        "explanation": best_rec["explanation"],
+        "recommendations": recommendations,
     }
 
 

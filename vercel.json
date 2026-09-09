@@ -1,0 +1,68 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "npm --prefix frontend run build",
+  "outputDirectory": "frontend/.next",
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/auth/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/users/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/wardrobe/upload",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/wardrobe/analyze",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/wardrobe/:id(\\d+.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/outfits/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/stylist/chat(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/stylist/status(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/stylist/api-key(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/weather/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/uploads/(.*)",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/health",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/docs",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/openapi.json",
+      "destination": "/api/index.py"
+    }
+  ]
+}

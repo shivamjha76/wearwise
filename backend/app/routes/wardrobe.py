@@ -11,8 +11,12 @@ from app.schemas.wardrobe import (
     WardrobeItemResponse
 )
 from app.services.wardrobe_gap import recommend_next_item
-from app.services.products import get_products_for_color
+from app.services.products import get_products_for_color, get_products_for_recommendation
+from app.services.vision import analyze_garment_image
 from app.core.dependencies import get_current_user
+
+
+from app.core.storage import get_upload_dir
 
 
 router = APIRouter(
@@ -22,9 +26,6 @@ router = APIRouter(
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
-
-UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @router.post("/upload")
@@ -46,8 +47,10 @@ async def upload_wardrobe_image(
         )
 
     unique_filename = f"{uuid.uuid4().hex}{ext}"
-    file_path = UPLOAD_DIR / unique_filename
+    upload_dir = get_upload_dir()
+    file_path = upload_dir / unique_filename
 
+    file_bytes = bytearray()
     file_size = 0
     with open(file_path, "wb") as buffer:
         while chunk := await file.read(1024 * 1024):
@@ -61,11 +64,55 @@ async def upload_wardrobe_image(
                     detail="File size exceeds maximum limit of 10MB"
                 )
             buffer.write(chunk)
+            file_bytes.extend(chunk)
+
+    mime_type = file.content_type or f"image/{ext.lstrip('.')}"
+    tags = analyze_garment_image(
+        image_bytes=bytes(file_bytes),
+        filename=file.filename,
+        mime_type=mime_type
+    )
 
     return {
         "image_url": f"/uploads/{unique_filename}",
-        "filename": unique_filename
+        "filename": unique_filename,
+        "tags": tags
     }
+
+
+@router.post("/analyze")
+async def analyze_clothing_image(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No filename provided"
+        )
+
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid file type '{ext}'. Allowed types: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+        )
+
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File size exceeds maximum limit of 10MB"
+        )
+
+    mime_type = file.content_type or f"image/{ext.lstrip('.')}"
+    analysis = analyze_garment_image(
+        image_bytes=content,
+        filename=file.filename,
+        mime_type=mime_type
+    )
+
+    return analysis
 
 
 @router.post(
@@ -165,7 +212,7 @@ def delete_wardrobe_item(
 
     if item.image_url and item.image_url.startswith("/uploads/"):
         filename = item.image_url.replace("/uploads/", "")
-        file_path = UPLOAD_DIR / filename
+        file_path = get_upload_dir() / filename
         if file_path.exists():
             try:
                 file_path.unlink()
@@ -215,11 +262,10 @@ def next_purchase(
         }
 
     for recommendation in recommendations:
-
-        products = get_products_for_color(
-            recommendation["color"]
+        products = get_products_for_recommendation(
+            category=recommendation.get("category", "shirt"),
+            color=recommendation["color"]
         )
-
         recommendation["products"] = products
 
     return {

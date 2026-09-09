@@ -1,10 +1,4 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-
-from app.database import get_db
-from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse
-
+from fastapi import APIRouter, HTTPException, status
 
 router = APIRouter(
     prefix="/users",
@@ -12,18 +6,9 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=UserResponse)
-def create_user(
-    user_data: UserCreate,
-    db: Session = Depends(get_db)
-):
-    user = User(
-        name=user_data.name,
-        email=user_data.email
+@router.post("/", deprecated=True)
+def create_user():
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Direct unauthenticated user creation is deprecated. Please register via /auth/register with a secure password."
     )
-
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    return user

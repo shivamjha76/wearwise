@@ -210,25 +210,26 @@ def generate_outfits(
     style_vibe=None,
     weather=None
 ):
+    top_categories = ["tshirt", "t-shirt", "shirt", "top", "polo", "hoodie", "sweater", "jacket", "blazer"]
+    bottom_categories = ["jeans", "pants", "trousers", "chinos", "shorts", "bottom", "joggers", "cargo"]
+    shoe_categories = ["shoes", "sneakers", "boots", "loafers", "footwear"]
+
     tops = [
         item
         for item in wardrobe
-        if item.category.lower()
-        in ["tshirt", "t-shirt", "shirt", "top"]
+        if (item.category or "").lower() in top_categories
     ]
 
     bottoms = [
         item
         for item in wardrobe
-        if item.category.lower()
-        in ["jeans", "pants", "trousers", "bottom"]
+        if (item.category or "").lower() in bottom_categories
     ]
 
     shoes = [
         item
         for item in wardrobe
-        if item.category.lower()
-        in ["shoes", "sneakers"]
+        if (item.category or "").lower() in shoe_categories
     ]
 
     outfits = []
