@@ -130,10 +130,8 @@ function getItemType(category: string) {
 
 function ClothingCard({
     item,
-    title,
 }: {
     item: WardrobeItem;
-    title: string;
 }) {
     return (
         <div className="min-w-0">
@@ -421,9 +419,9 @@ export default function StylePage() {
 
                                 {/* CLOTHES */}
                                 <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                                    <ClothingCard item={top} title="Top" />
-                                    <ClothingCard item={bottom} title="Bottom" />
-                                    <ClothingCard item={shoes} title="Footwear" />
+                                    <ClothingCard item={top} />
+                                    <ClothingCard item={bottom} />
+                                    <ClothingCard item={shoes} />
                                 </div>
 
                             </section>

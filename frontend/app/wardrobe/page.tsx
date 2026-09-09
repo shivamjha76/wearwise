@@ -59,7 +59,11 @@ export default function WardrobePage() {
     };
 
     useEffect(() => {
-        fetchWardrobe();
+        const requestTimer = window.setTimeout(fetchWardrobe, 0);
+
+        return () => window.clearTimeout(requestTimer);
+        // fetchWardrobe reads the user ID stored by the profile flow on mount.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleChange = (
@@ -311,7 +315,7 @@ export default function WardrobePage() {
                                 </h2>
 
                                 <p className="mt-1 text-sm text-gray-500">
-                                    Everything you've added so far.
+                                    Everything you&apos;ve added so far.
                                 </p>
                             </div>
                         </div>

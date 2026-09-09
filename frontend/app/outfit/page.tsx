@@ -51,7 +51,6 @@ export default function OutfitPage() {
         }
 
         const recommendationData = JSON.parse(savedRecommendation) as OutfitData;
-        setData(recommendationData);
 
         const fetchWardrobe = async () => {
             try {
@@ -72,7 +71,12 @@ export default function OutfitPage() {
             }
         };
 
-        fetchWardrobe();
+        const requestTimer = window.setTimeout(() => {
+            setData(recommendationData);
+            fetchWardrobe();
+        }, 0);
+
+        return () => window.clearTimeout(requestTimer);
     }, [router]);
 
     const recommendation =
