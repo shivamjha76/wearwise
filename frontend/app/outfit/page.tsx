@@ -28,6 +28,7 @@ type WardrobeItem = {
     fit: string | null;
     pattern: string | null;
     style: string | null;
+    image_url: string | null;
 };
 
 export default function OutfitPage() {

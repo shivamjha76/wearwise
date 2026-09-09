@@ -41,7 +41,8 @@ def add_wardrobe_item(
         color=item_data.color,
         fit=item_data.fit,
         pattern=item_data.pattern,
-        style=item_data.style
+        style=item_data.style,
+        image_url=item_data.image_url
     )
 
     db.add(item)

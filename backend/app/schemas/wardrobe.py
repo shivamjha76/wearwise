@@ -7,6 +7,7 @@ class WardrobeItemCreate(BaseModel):
     fit: str | None = None
     pattern: str | None = None
     style: str | None = None
+    image_url: str | None = None
 
 
 class WardrobeItemResponse(BaseModel):
@@ -17,6 +18,7 @@ class WardrobeItemResponse(BaseModel):
     fit: str | None
     pattern: str | None
     style: str | None
+    image_url: str | None
 
     class Config:
         from_attributes = True

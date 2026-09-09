@@ -7,7 +7,7 @@ PRODUCTS = [
         "fit": "regular",
         "price": 899,
         "brand": "WearWise Picks",
-        "image": "https://placehold.co/400x500?text=Maroon+Shirt"
+        "image": "/products/classic_maroon_shirt.png"
     },
     {
         "id": 2,
@@ -17,7 +17,7 @@ PRODUCTS = [
         "fit": "relaxed",
         "price": 799,
         "brand": "WearWise Picks",
-        "image": "https://placehold.co/400x500?text=Beige+Shirt"
+        "image": "/products/beige_casual_shirt.png"
     },
     {
         "id": 3,
@@ -27,7 +27,7 @@ PRODUCTS = [
         "fit": "regular",
         "price": 849,
         "brand": "WearWise Picks",
-        "image": "https://placehold.co/400x500?text=Olive+Shirt"
+        "image": "/products/olive_green_shirt.png"
     },
     {
         "id": 4,
@@ -37,7 +37,7 @@ PRODUCTS = [
         "fit": "regular",
         "price": 699,
         "brand": "WearWise Picks",
-        "image": "https://placehold.co/400x500?text=White+Shirt"
+        "image": "/products/classic_white_shirt.png"
     },
     {
         "id": 5,
@@ -47,10 +47,9 @@ PRODUCTS = [
         "fit": "relaxed",
         "price": 749,
         "brand": "WearWise Picks",
-        "image": "https://placehold.co/400x500?text=Black+Shirt"
+        "image": "/products/black_casual_shirt.png"
     }
 ]
-
 
 def get_products_for_color(color: str):
     return [

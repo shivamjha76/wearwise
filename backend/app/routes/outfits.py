@@ -8,57 +8,36 @@ from app.models.wardrobe import WardrobeItem
 from app.services.recommendation import generate_outfits
 from app.services.ai import explain_outfit
 
-router = APIRouter(
-    prefix="/outfits",
-    tags=["Outfits"]
-)
+router = APIRouter(prefix="/outfits", tags=["Outfits"])
 
 
 @router.post("/{user_id}")
 def get_outfits(
     user_id: int,
     occasion: str,
-    db: Session = Depends(get_db)
+    style_vibe: str | None = None,
+    db: Session = Depends(get_db),
 ):
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    profile = (
-        db.query(StyleProfile)
-        .filter(StyleProfile.user_id == user_id)
-        .first()
-    )
+    profile = db.query(StyleProfile).filter(StyleProfile.user_id == user_id).first()
 
     if not profile:
-        raise HTTPException(
-            status_code=404,
-            detail="Style profile not found"
-        )
+        raise HTTPException(status_code=404, detail="Style profile not found")
 
-    wardrobe = (
-        db.query(WardrobeItem)
-        .filter(WardrobeItem.user_id == user_id)
-        .all()
-    )
+    wardrobe = db.query(WardrobeItem).filter(WardrobeItem.user_id == user_id).all()
 
     if not wardrobe:
-        raise HTTPException(
-            status_code=400,
-            detail="Wardrobe is empty"
-        )
+        raise HTTPException(status_code=400, detail="Wardrobe is empty")
 
-    outfits = generate_outfits(
-        wardrobe,
-        profile,
-        occasion
-    )
+    outfits = generate_outfits(wardrobe, profile, occasion, style_vibe)
 
     if not outfits:
         raise HTTPException(
-            status_code=400,
-            detail="Not enough wardrobe items to generate an outfit"
+            status_code=400, detail="Not enough wardrobe items to generate an outfit"
         )
 
     best = outfits[0]
@@ -67,13 +46,7 @@ def get_outfits(
     shoes = best["shoes"]
 
     try:
-        explanation = explain_outfit(
-            top,
-            bottom,
-            shoes,
-            profile,
-            occasion
-        )
+        explanation = explain_outfit(top, bottom, shoes, profile, occasion)
     except Exception as exc:
         print(repr(exc))
         explanation = "AI explanation unavailable"
@@ -81,14 +54,12 @@ def get_outfits(
     return {
         "user_id": user_id,
         "occasion": occasion,
-        "recommendations": [
-            {
-                "top": outfit["top"].id,
-                "bottom": outfit["bottom"].id,
-                "shoes": outfit["shoes"].id,
-                "score": outfit["score"]
-            }
-            for outfit in outfits
-        ],
-        "explanation": explanation
+        "style_vibe": style_vibe,
+        "recommendation": {
+            "top_id": best["top"].id,
+            "bottom_id": best["bottom"].id,
+            "shoes_id": best["shoes"].id,
+            "score": best["score"],
+        },
+        "explanation": explanation,
     }

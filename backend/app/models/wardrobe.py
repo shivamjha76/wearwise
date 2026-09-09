@@ -18,3 +18,6 @@ class WardrobeItem(Base):
     fit = Column(String(50))
     pattern = Column(String(50))
     style = Column(String(50))
+
+    # Optional clothing image URL
+    image_url = Column(String(500))

@@ -259,3 +259,35 @@ INFO:     Finished server process [2884]
 INFO:     Started server process [18712]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'app\routes\wardrobe.py'. Reloading...
+ INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [18712]
+INFO:     Started server process [26136]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'app\models\wardrobe.py'. Reloading...
+ INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [26136]
+INFO:     Started server process [24916]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'app\schemas\wardrobe.py'. Reloading...
+ INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [24916]
+INFO:     Started server process [18508]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'app\routes\wardrobe.py'. Reloading...
+ INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [18508]
+INFO:     Started server process [4872]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
