@@ -277,41 +277,32 @@ def generate_conversational_reply(
     # 1. GREETINGS
     if intent == "greeting":
         greetings = [
-            f"{greeting_prefix}Great to see you! I'm **Veya**, your personal WearWise AI stylist.\n\nHow can I help you today? You can ask me:\n• *\"What should I wear for a dinner date?\"*\n• *\"What colors pair best with beige chinos?\"*\n• *\"How should I style my sneakers?\"*\n• *\"Put together a casual outfit from my closet\"*",
-            f"{greeting_prefix}Hope you're having an awesome day! I'm **Veya**, and I'm ready to help you look your best.\n\nAre you dressing for a specific event today, or looking for style tips from your wardrobe?",
-            f"Hello{(' ' + clean_name) if clean_name else ''}! ✨ I'm **Veya**, your personal WearWise stylist.\n\nWhether you need an outfit formula for work, an evening outing, or just want to explore fresh color combinations, let me know what you're thinking!"
+            f"{greeting_prefix}I'm **Veya**, your personal AI stylist! How can I help you style your look today?",
+            f"{greeting_prefix}Ready to help you look your best! Need an outfit idea or quick styling advice?",
+            f"Hello{(' ' + clean_name) if clean_name else ''}! ✨ I'm **Veya**. What outfit or style question can I solve for you today?"
         ]
         return random.choice(greetings), [], None
 
     # 2. HOW ARE YOU / CHIT-CHAT
     if intent == "how_are_you":
         return (
-            f"I'm feeling sharp and ready to style, thanks for asking! 😊\n\n"
-            f"How about you? Got any exciting plans coming up or an event you need an outfit for? "
-            f"Tell me what's on your agenda, and we'll craft the perfect look."
+            f"I'm feeling great and ready to style, thanks for asking! 😊 How can I help you put together a look today?"
         ), [], None
 
     # 3. IDENTITY / WHO ARE YOU
     if intent == "identity":
         return (
-            f"I am **Veya** ✦ — your dedicated personal fashion consultant and WearWise digital wardrobe companion.\n\n"
-            f"### Here is what I can do:\n"
-            f"• **Closet Intelligence:** I know the garments in your digital wardrobe vault and match them to your personal aesthetic.\n"
-            f"• **Context Styling:** I create outfits tailored for interviews, dates, college, gym, parties, or casual days.\n"
-            f"• **Color & Proportion Rules:** I guide you on color harmonies, silhouette balance, and fit rules.\n"
-            f"• **Endless Styling Advice:** Ask me about trends, footwear pairing, accessories, or styling dilemmas!\n\n"
-            f"What would you like to explore first?"
+            f"I am **Veya**, your personal WearWise AI stylist! ✦\n\n"
+            f"I help you assemble outfits from your wardrobe, recommend color pairings, and keep you looking sharp for any occasion. What would you like to style?"
         ), [], None
 
     # 4. CAPABILITIES / HELP
     if intent == "capabilities":
         return (
-            f"Here are the main ways we can work together to elevate your wardrobe:\n\n"
-            f"1. **Outfit Curation:** Ask *\"What should I wear to a dinner date?\"* or *\"Style an interview look\"*, and I'll assemble a complete top + bottom + footwear look from your closet.\n"
-            f"2. **Color Harmony:** Ask *\"What colors go with olive green?\"* or *\"Can I wear brown shoes with black trousers?\"* for instant color theory rules.\n"
-            f"3. **Garment Styling:** Ask *\"How should I style my white sneakers?\"* to get multiple ways to rock a specific piece.\n"
-            f"4. **Fit & Silhouette Advice:** Tell me about your preferences, and I'll give advice tailored to your frame and vibe.\n\n"
-            f"💡 **Tip:** Keep adding your clothes in the **Wardrobe** tab so I can style your real-world garments!"
+            f"Here is how I can help:\n"
+            f"• **Curate Outfits:** Ask *\"What should I wear to a dinner/interview?\"* for a complete look from your closet.\n"
+            f"• **Color Pairing:** Ask *\"What colors go with olive green?\"* for instant pairing rules.\n"
+            f"• **Piece Styling:** Ask *\"How should I style white sneakers?\"* for quick combination ideas."
         ), [], None
 
     # 5. JOKES / HUMOR
@@ -543,17 +534,14 @@ def generate_heuristic_advice(
         "casual": "💡 **Stylist Pro-Tip:** Keep accessories simple — clean white socks, sleek sunglasses, or a minimalist cap do wonders."
     }
 
-    pro_tip = pro_tips.get(occasion, pro_tips["casual"])
-    points_str = "\n".join(styling_points)
+    pro_tip = pro_tips.get(occasion, pro_tips["casual"]).replace("💡 **Stylist Pro-Tip:** ", "")
+    top_name = selected_top.color.title() if selected_top else "your top"
+    bottom_name = selected_bottom.color.title() if selected_bottom else "your bottom"
 
-    reply = f"""{greeting} {intro}
+    reply = f"""From your wardrobe, I recommend wearing **{outfit_summary}**.
 
-From your wardrobe, I recommend wearing **{outfit_summary}**.
-
-**Why this combination works:**
-{points_str}
-
-{pro_tip}"""
+• **Why it works:** Pairing {top_name} with {bottom_name} creates a clean, balanced look for {occasion}.
+• **Stylist Tip:** {pro_tip}"""
 
     return reply.strip(), recommended_items, occasion
 
@@ -596,7 +584,7 @@ def call_gemini_api(
         "contents": contents,
         "generationConfig": {
             "temperature": 0.7,
-            "maxOutputTokens": 800
+            "maxOutputTokens": 220
         }
     }
 
@@ -642,7 +630,7 @@ def call_openai_api(
                 model="gpt-4o-mini",
                 messages=messages,
                 temperature=0.7,
-                max_tokens=750
+                max_tokens=220
             )
             return resp.choices[0].message.content.strip()
         except Exception as e:
@@ -658,7 +646,7 @@ def call_openai_api(
                         "model": "gpt-4o-mini",
                         "messages": messages,
                         "temperature": 0.7,
-                        "max_tokens": 750
+                        "max_tokens": 220
                     }
                 )
                 if res.status_code == 200:
@@ -697,7 +685,7 @@ def call_groq_api(
                     "model": "llama-3.3-70b-versatile",
                     "messages": messages,
                     "temperature": 0.7,
-                    "max_tokens": 800
+                    "max_tokens": 220
                 }
             )
             if res.status_code == 200:
@@ -750,7 +738,7 @@ def get_stylist_reply(
         if profile else "Profile not yet filled."
     )
 
-    system_prompt = f"""You are Veya, an intelligent, modern, encouraging, and highly versatile personal fashion stylist and conversational AI companion for WearWise.
+    system_prompt = f"""You are Veya, an intelligent, modern, chic, and concise personal fashion stylist and conversational AI companion for WearWise.
 When asked who you are or what your name is, your name is Veya!
 You are chatting with {user_name}.
 
@@ -760,27 +748,25 @@ USER'S STYLE PROFILE:
 USER'S CURRENT WARDROBE INVENTORY:
 {inventory_text}
 
-INSTRUCTIONS & BEHAVIOR:
-1. COMPLETE CONVERSATIONAL FREEDOM (CHATGPT / GEMINI STYLE):
-   - You are a fully capable AI assistant! You can talk about ANYTHING the user wants:
-     * Everyday conversations, greetings, how are you, personal thoughts
-     * General knowledge, science, life advice, food, tech, travel, jokes, stories
-     * Fashion styling, color theory, outfit formulas, shopping tips, fabric care
-   - Give direct, helpful, engaging, and relevant answers to WHATEVER the user asks or says.
-   - If the user writes in Hindi or Hinglish, converse effortlessly in friendly Hinglish/English.
-   - Never say "I can only talk about clothes" — converse naturally like ChatGPT or Gemini on any topic, while retaining your charming, stylish personality!
+CRITICAL DIRECTIVE — BE CONCISE & TO THE POINT (NO ESSAYS):
+1. STRICT BREVITY:
+   - ONLY answer what is necessary. Never output long, wordy paragraphs, filler intros, or endless follow-up questions.
+   - Keep total response length strictly between 1 to 4 sentences maximum.
+   - For greetings, chit-chat, or small talk: Reply in 1 to 2 warm, crisp sentences.
+   - If user asks in Hindi or Hinglish, reply naturally in concise, friendly Hinglish/English.
 
-2. WARDROBE OUTFIT RECOMMENDATIONS:
-   - When the user explicitly asks for an outfit recommendation, what to wear for an occasion/event, or how to style a specific piece:
-     * Check their wardrobe inventory above and assemble a look using their real clothes whenever possible!
-     * Explain why the colors and fit complement each other and suit the occasion.
-     * Append the recommended item numeric IDs at the very end on a new line:
-       RECOMMENDED_ITEM_IDS: [id1, id2, id3]
-   - If the user did NOT ask for an outfit, DO NOT include RECOMMENDED_ITEM_IDS.
-   - If their wardrobe is empty and they ask what to wear, suggest general outfit combinations and gently invite them to add items to their Wardrobe tab.
+2. OUTFIT RECOMMENDATIONS:
+   - When asked what to wear or for an outfit recommendation:
+     * Name the chosen pieces directly (e.g., "Pair your White Linen Shirt with Navy Chinos and White Sneakers.").
+     * Give 1 or 2 quick sentences on why the combination works for the occasion.
+     * At the very end on a new line, output: RECOMMENDED_ITEM_IDS: [id1, id2, ...] (using valid IDs from inventory).
+   - If the user did NOT ask for an outfit, DO NOT output RECOMMENDED_ITEM_IDS.
 
-3. FORMATTING:
-   - Use beautiful, readable Markdown (clean bullet points, bold key terms, and line breaks)."""
+3. COLOR & STYLING QUERIES:
+   - Give 2 to 3 top matching shades or tips directly and concisely, without filler.
+
+4. FORMAT:
+   - Clean, readable Markdown with bold highlights."""
 
 
     llm_reply = None
