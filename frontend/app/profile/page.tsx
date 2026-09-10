@@ -143,7 +143,33 @@ export default function ProfilePage() {
       ...prev,
       name: user.name,
       email: user.email,
+      phone: user.phone || prev.phone,
+      gender: user.gender || prev.gender,
+      skin_tone: user.skin_tone || prev.skin_tone,
     }));
+
+    // Restore cached style profile instantly from localStorage
+    try {
+      const cachedProfile = localStorage.getItem(`wearwise_style_profile_${user.id}`);
+      if (cachedProfile) {
+        const data = JSON.parse(cachedProfile);
+        setForm((prev) => ({
+          ...prev,
+          gender: data.gender || prev.gender,
+          height: data.height != null ? String(data.height) : prev.height,
+          weight: data.weight != null ? String(data.weight) : prev.weight,
+          skin_tone: data.skin_tone || prev.skin_tone,
+          style_preference: data.style_preference || prev.style_preference,
+          fit_preference: data.fit_preference || prev.fit_preference,
+          chest_bust: data.chest_bust || prev.chest_bust,
+          waist_size: data.waist_size || prev.waist_size,
+          hip_size: data.hip_size || prev.hip_size,
+          top_size: data.top_size || prev.top_size,
+          bottom_size: data.bottom_size || prev.bottom_size,
+          shoe_size: data.shoe_size || prev.shoe_size,
+        }));
+      }
+    } catch {}
 
     const loadProfile = async () => {
       try {
@@ -162,6 +188,8 @@ export default function ProfilePage() {
             name: freshUser.name || prev.name,
             email: freshUser.email || prev.email,
             phone: freshUser.phone || prev.phone,
+            gender: freshUser.gender || prev.gender,
+            skin_tone: freshUser.skin_tone || prev.skin_tone,
           }));
           if (token) {
             setSession(token, freshUser);
@@ -178,6 +206,9 @@ export default function ProfilePage() {
         });
         if (res.ok) {
           const data = await res.json();
+          try {
+            localStorage.setItem(`wearwise_style_profile_${user.id}`, JSON.stringify(data));
+          } catch {}
           setForm((prev) => ({
             ...prev,
             gender: data.gender || prev.gender,
@@ -327,12 +358,15 @@ export default function ProfilePage() {
         }),
       });
 
-      if (userRes.ok) {
-        const freshUser: User = await userRes.json();
-        setCurrentUser(freshUser);
-        const token = getStoredToken();
-        if (token) setSession(token, freshUser);
+      if (!userRes.ok) {
+        const errData = await userRes.json().catch(() => ({}));
+        throw new Error(errData.detail || "Failed to update member name and phone");
       }
+
+      const freshUser: User = await userRes.json();
+      setCurrentUser(freshUser);
+      const token = getStoredToken();
+      if (token) setSession(token, freshUser);
 
       // 2. Update Style Profile with measurements & sizes
       const profileResponse = await fetch(`${API_BASE_URL}/users/${user.id}/style-profile`, {
@@ -355,16 +389,20 @@ export default function ProfilePage() {
       });
 
       if (!profileResponse.ok) {
-        throw new Error("Failed to save style profile");
+        const errData = await profileResponse.json().catch(() => ({}));
+        throw new Error(errData.detail || "Failed to save style profile and measurements");
       }
 
-      setToastMessage("Profile & measurements updated successfully! ✨");
-      setTimeout(() => {
-        router.push("/wardrobe");
-      }, 700);
-    } catch (error) {
+      const freshProfile = await profileResponse.json();
+      try {
+        localStorage.setItem(`wearwise_style_profile_${user.id}`, JSON.stringify(freshProfile));
+      } catch {}
+
+      setToastMessage("Profile & measurements saved successfully! ✨");
+    } catch (error: unknown) {
       console.error(error);
-      setToastMessage("Something went wrong saving your profile.");
+      const msg = error instanceof Error ? error.message : "Something went wrong saving your profile.";
+      setToastMessage(msg);
     } finally {
       setLoading(false);
     }
@@ -842,11 +880,11 @@ export default function ProfilePage() {
           </div>
 
           {/* Submit Action */}
-          <div className="border-t border-[#eceef0] pt-6">
+          <div className="border-t border-[#eceef0] pt-6 flex flex-col sm:flex-row items-center gap-3">
             <button
               type="submit"
               disabled={loading}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#171717] px-6 text-xs sm:text-sm font-bold text-white shadow-sm transition hover:bg-black active:scale-98 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+              className="flex h-12 w-full sm:flex-1 items-center justify-center gap-2 rounded-xl bg-[#171717] px-6 text-xs sm:text-sm font-bold text-white shadow-sm transition hover:bg-black active:scale-98 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
             >
               {loading ? (
                 <>
@@ -855,10 +893,19 @@ export default function ProfilePage() {
                 </>
               ) : (
                 <>
-                  <span>Save Profile & Go to Wardrobe</span>
-                  <span>→</span>
+                  <span>Save Profile</span>
+                  <span>✓</span>
                 </>
               )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => router.push("/wardrobe")}
+              className="flex h-12 w-full sm:w-auto items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-6 text-xs sm:text-sm font-bold text-gray-800 hover:bg-gray-50 transition cursor-pointer"
+            >
+              <span>Go to Wardrobe</span>
+              <span>→</span>
             </button>
           </div>
 

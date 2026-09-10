@@ -36,7 +36,17 @@ def get_outfits(
     profile = db.query(StyleProfile).filter(StyleProfile.user_id == user_id).first()
 
     if not profile:
-        raise HTTPException(status_code=404, detail="Style profile not found")
+        profile = StyleProfile(
+            user_id=user_id,
+            height=175.0,
+            weight=70.0,
+            style_preference="casual",
+            fit_preference="regular",
+            budget=5000.0,
+        )
+        db.add(profile)
+        db.commit()
+        db.refresh(profile)
 
     wardrobe = db.query(WardrobeItem).filter(WardrobeItem.user_id == user_id).all()
 

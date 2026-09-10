@@ -271,11 +271,13 @@ export default function StylePage() {
       ]);
 
       if (!outfitResponse.ok) {
-        throw new Error("Could not generate outfit");
+        const errData = await outfitResponse.json().catch(() => ({}));
+        throw new Error(errData.detail || "Could not generate outfit");
       }
 
       if (!wardrobeResponse.ok) {
-        throw new Error("Could not load wardrobe");
+        const errData = await wardrobeResponse.json().catch(() => ({}));
+        throw new Error(errData.detail || "Could not load wardrobe");
       }
 
       const outfitData = await outfitResponse.json();
@@ -289,11 +291,16 @@ export default function StylePage() {
         "wearwise_style_preferences",
         JSON.stringify({ weather, styleVibe })
       );
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(
-        "Could not generate an outfit. Make sure you have added at least one top, bottom, and footwear in your wardrobe."
-      );
+      const msg = err instanceof Error ? err.message : "";
+      if (msg === "Failed to fetch") {
+        setError("Unable to connect to backend server. Make sure FastAPI is running on http://127.0.0.1:8000.");
+      } else if (msg.includes("Wardrobe is empty") || msg.includes("Not enough wardrobe items")) {
+        setError("Your wardrobe needs at least one top (t-shirt/shirt), one bottom (jeans/pants), and one pair of shoes/sneakers to curate a look.");
+      } else {
+        setError(msg || "Could not generate an outfit. Make sure you have added at least one top, bottom, and footwear in your wardrobe.");
+      }
     } finally {
       setLoading(false);
     }

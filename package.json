@@ -6,9 +6,14 @@
     "frontend"
   ],
   "scripts": {
-    "dev": "npm --prefix frontend run dev",
+    "dev": "concurrently -k -n \"backend,frontend\" -c \"cyan,magenta\" \"python -m uvicorn app.main:app --reload --app-dir backend --host 127.0.0.1 --port 8000\" \"npm --prefix frontend run dev\"",
+    "dev:backend": "python -m uvicorn app.main:app --reload --app-dir backend --host 127.0.0.1 --port 8000",
+    "dev:frontend": "npm --prefix frontend run dev",
     "build": "npm --prefix frontend run build",
     "start": "npm --prefix frontend run start",
     "lint": "npm --prefix frontend run lint"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
   }
 }

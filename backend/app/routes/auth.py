@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import User
+from app.models.style_profile import StyleProfile
 from app.schemas.auth import UserRegister, UserLogin, TokenResponse
 from app.schemas.user import UserResponse
 from app.core.security import hash_password, verify_password, create_access_token
@@ -54,6 +55,9 @@ def register(
         "name": new_user.name
     })
 
+    new_user.skin_tone = None
+    new_user.gender = None
+
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -80,6 +84,10 @@ def login(
             detail="Invalid email or password"
         )
 
+    profile = db.query(StyleProfile).filter(StyleProfile.user_id == user.id).first()
+    user.skin_tone = profile.skin_tone if profile else None
+    user.gender = profile.gender if profile else None
+
     token = create_access_token({
         "sub": str(user.id),
         "email": user.email,
@@ -94,5 +102,11 @@ def login(
 
 
 @router.get("/me", response_model=UserResponse)
-def get_me(current_user: User = Depends(get_current_user)):
+def get_me(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    profile = db.query(StyleProfile).filter(StyleProfile.user_id == current_user.id).first()
+    current_user.skin_tone = profile.skin_tone if profile else None
+    current_user.gender = profile.gender if profile else None
     return current_user

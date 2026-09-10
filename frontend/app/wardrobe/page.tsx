@@ -324,8 +324,11 @@ export default function WardrobePage() {
         throw new Error("Failed to fetch wardrobe");
       }
 
-      const data = await response.json();
+      const data: WardrobeItem[] = await response.json();
       setItems(data);
+      try {
+        localStorage.setItem(`wearwise_wardrobe_${targetUserId}`, JSON.stringify(data));
+      } catch {}
     } catch (error) {
       console.error(error);
       setNotification({ type: "error", message: "Failed to load wardrobe items." });
@@ -341,6 +344,19 @@ export default function WardrobePage() {
       return;
     }
     setCurrentUser(user);
+
+    // Instant local cache restoration so clothes don't disappear on refresh
+    try {
+      const cached = localStorage.getItem(`wearwise_wardrobe_${user.id}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setItems(parsed);
+          setLoading(false);
+        }
+      }
+    } catch {}
+
     fetchWardrobe(user.id);
   }, [router]);
 
@@ -359,11 +375,7 @@ export default function WardrobePage() {
       let finalStyle = form.style || "casual";
 
       if (imageMode === "upload") {
-        if (!file) {
-          setNotification({ type: "error", message: "Please click a photo or choose an image file first." });
-          setUploading(false);
-          return;
-        }
+        if (file) {
 
         const formData = new FormData();
         formData.append("file", file);
@@ -394,6 +406,7 @@ export default function WardrobePage() {
         finalFit = form.fit || uploadData.tags?.fit || "regular";
         finalPattern = form.pattern || uploadData.tags?.pattern || "solid";
         finalStyle = form.style || uploadData.tags?.style || "casual";
+        }
       } else if (imageMode === "url") {
         const trimmedUrl = form.image_url.trim();
         if (!trimmedUrl) {
@@ -449,8 +462,18 @@ export default function WardrobePage() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to add item");
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || "Failed to add clothing item");
       }
+
+      const createdItem: WardrobeItem = await response.json();
+      setItems((prev) => {
+        const next = [createdItem, ...prev.filter((x) => x.id !== createdItem.id)];
+        try {
+          localStorage.setItem(`wearwise_wardrobe_${currentUser.id}`, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
 
       handleClearFile();
       setForm((prev) => ({ ...prev, image_url: "" }));
@@ -474,10 +497,18 @@ export default function WardrobePage() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to delete item");
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || "Failed to delete item");
       }
 
       if (currentUser) {
+        setItems((prev) => {
+          const next = prev.filter((i) => i.id !== itemId);
+          try {
+            localStorage.setItem(`wearwise_wardrobe_${currentUser.id}`, JSON.stringify(next));
+          } catch {}
+          return next;
+        });
         await fetchWardrobe(currentUser.id);
       }
       setNotification({ type: "success", message: "Garment removed from wardrobe." });

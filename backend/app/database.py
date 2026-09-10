@@ -56,8 +56,8 @@ def build_database_url():
                     except Exception:
                         pass
         return "sqlite:////tmp/wearwise.db"
-
-    return "sqlite:///./wearwise.db"
+    sqlite_file = (PROJECT_ROOT / "wearwise.db").resolve()
+    return f"sqlite:///{sqlite_file.as_posix()}"
 
 
 DATABASE_URL = build_database_url()
