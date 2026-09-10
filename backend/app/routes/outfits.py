@@ -68,8 +68,13 @@ def get_outfits(
         o_shoes = o["shoes"]
         try:
             o_explanation = explain_outfit(o_top, o_bottom, o_shoes, profile, occasion, weather)
-        except Exception:
-            o_explanation = "AI explanation unavailable"
+        except Exception as err:
+            print(f"Warning: explain_outfit error: {err}")
+            from app.services.ai import _heuristic_explanation
+            try:
+                o_explanation = _heuristic_explanation(o_top, o_bottom, o_shoes, profile, occasion, weather)
+            except Exception:
+                o_explanation = f"This look pairs your {getattr(o_top, 'color', '')} {getattr(o_top, 'category', 'top')} with {getattr(o_bottom, 'color', '')} {getattr(o_bottom, 'category', 'bottom')} and {getattr(o_shoes, 'color', '')} {getattr(o_shoes, 'category', 'shoes')} for a well-coordinated {occasion} aesthetic."
 
         breakdown = get_harmonic_breakdown(o_top, o_bottom, o_shoes, profile, occasion, weather)
 

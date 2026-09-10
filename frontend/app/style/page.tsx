@@ -457,8 +457,11 @@ export default function StylePage() {
   const top = activeRec ? getWardrobeItem(activeRec.top_id) : undefined;
   const bottom = activeRec ? getWardrobeItem(activeRec.bottom_id) : undefined;
   const shoes = activeRec ? getWardrobeItem(activeRec.shoes_id) : undefined;
+  const rawExplanation = activeRec?.explanation || outfit?.explanation || "";
   const activeExplanation =
-    activeRec?.explanation || outfit?.explanation || "AI explanation unavailable";
+    rawExplanation && rawExplanation !== "AI explanation unavailable"
+      ? rawExplanation
+      : `This look pairs your ${top?.color || "classic"} ${top?.category || "piece"} with ${bottom?.color || "complementary"} ${bottom?.category || "bottom"} and ${shoes?.color || "matching"} ${shoes?.category || "footwear"}. The colors and tailored proportions create an effortless, balanced aesthetic designed for a ${occasion} setting.`;
   const harmonic = resolveHarmonicBreakdown(activeRec, top, bottom, weather, occasion);
 
   const saveOutfit = async () => {

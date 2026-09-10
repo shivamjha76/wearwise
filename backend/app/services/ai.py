@@ -42,6 +42,7 @@ def explain_outfit(
     occasion: str,
     weather: str | None = None
 ) -> str:
+    weather_desc = f"- Weather: {weather}" if weather else ""
     prompt = f"""You are a personal fashion stylist for WearWise.
 
 Explain why this outfit combination looks great together.

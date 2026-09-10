@@ -68,8 +68,11 @@ export default function OutfitPage() {
 
   const activeRec: Recommendation | undefined =
     recommendationsList[selectedLookIdx] || recommendationsList[0];
+  const rawExplanation = activeRec?.explanation || data?.explanation || "";
   const activeExplanation =
-    activeRec?.explanation || data?.explanation || "AI explanation unavailable";
+    rawExplanation && rawExplanation !== "AI explanation unavailable"
+      ? rawExplanation
+      : `This look pairs your pieces with complementary tones and proportions tailored for a ${data?.occasion || "versatile"} setting.`;
 
   const saveOutfit = async () => {
     const user = getStoredUser();
