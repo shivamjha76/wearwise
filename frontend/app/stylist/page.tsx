@@ -45,6 +45,7 @@ const COLOR_MAP: Record<string, string> = {
   maroon: "#881337",
 };
 
+// Exactly 3 style prompts for perfect symmetry
 const STYLE_PROMPTS = [
   {
     label: "Style an outfit for tonight",
@@ -61,12 +62,68 @@ const STYLE_PROMPTS = [
     icon: "👞",
     prompt: "What shirt and trouser color combinations work best with brown footwear?",
   },
-  {
-    label: "Minimalist weekend aesthetic",
-    icon: "☕",
-    prompt: "Give me an effortless, clean minimalist weekend outfit formula.",
-  },
 ];
+
+// 4-5 words taglines for Veya AI with typewriter animation
+const STYLIST_TAGLINES = [
+  "Your personal aesthetic, curated daily.",
+  "Effortless style for every occasion.",
+  "Your closet, styled with precision.",
+  "Smart fashion tailored to you.",
+  "Color harmony and outfit formulas.",
+];
+
+function AnimatedStylistTagline() {
+  const [index, setIndex] = useState(0);
+  const [subIndex, setSubIndex] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+
+  useEffect(() => {
+    if (isPaused) {
+      const pauseTimer = setTimeout(() => {
+        setIsPaused(false);
+        setIsDeleting(true);
+      }, 2200);
+      return () => clearTimeout(pauseTimer);
+    }
+
+    if (isDeleting) {
+      if (subIndex === 0) {
+        setIsDeleting(false);
+        setIndex((prev) => (prev + 1) % STYLIST_TAGLINES.length);
+        return;
+      }
+      const deleteTimer = setTimeout(() => {
+        setSubIndex((prev) => prev - 1);
+      }, 35);
+      return () => clearTimeout(deleteTimer);
+    }
+
+    if (subIndex === STYLIST_TAGLINES[index].length) {
+      setIsPaused(true);
+      return;
+    }
+
+    const typeTimer = setTimeout(() => {
+      setSubIndex((prev) => prev + 1);
+    }, 70);
+
+    return () => clearTimeout(typeTimer);
+  }, [subIndex, index, isDeleting, isPaused]);
+
+  return (
+    <div className="flex items-center justify-center min-h-[28px]">
+      <p className="text-xs sm:text-sm font-medium text-[#736b5e] tracking-tight flex items-center justify-center gap-1.5">
+        <span className="text-neutral-400 text-xs">✨</span>
+        <span className="text-[#2b261f] font-semibold tracking-tight">
+          {STYLIST_TAGLINES[index].substring(0, subIndex)}
+        </span>
+        <span className="inline-block w-[2px] h-3.5 sm:h-4 bg-[#171717] align-middle animate-pulse" />
+      </p>
+    </div>
+  );
+}
 
 function getItemRole(category: string): "Top" | "Bottom" | "Footwear" {
   const value = category.toLowerCase();
@@ -464,53 +521,18 @@ export default function StylistPage() {
         </div>
       )}
 
-      {/* ================= TOP NAVBAR ================= */}
-      <header className="sticky top-0 z-30 border-b border-[#e5dfd5]/80 bg-[#f4f0ea]/90 px-4 py-3 backdrop-blur-md sm:px-8">
-        <div className="mx-auto flex max-w-5xl items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#171717] text-sm text-white shadow-2xs">
-              ✦
-            </div>
-            <div>
-              <h1 className="text-sm sm:text-base font-extrabold tracking-tight text-[#1a1714] flex items-center gap-1.5">
-                <span>Veya</span>
-                <span className="rounded-full bg-black/10 px-2 py-0.5 text-[9px] font-bold tracking-wider uppercase text-neutral-800">
-                  AI Stylist
-                </span>
-              </h1>
-              {engineInfo && (
-                <p className="text-[10px] font-medium text-neutral-500 hidden sm:block">
-                  Personal Stylist • {engineInfo.label}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={resetChat}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-[#ded5c6] bg-white px-3.5 py-1.5 text-xs font-semibold text-[#524a3e] shadow-2xs transition hover:border-black/30 hover:bg-[#faf7f2] hover:text-black cursor-pointer active:scale-95"
-              title="Start a fresh styling conversation"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 4v16m8-8H4" />
-              </svg>
-              <span>New Chat</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowKeyModal(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-[#ded5c6] bg-white px-3 py-1.5 text-xs font-semibold text-[#524a3e] shadow-2xs transition hover:border-black/30 hover:bg-[#faf7f2] hover:text-black cursor-pointer"
-              title="Configure AI Engine API Key"
-            >
-              <span className="text-xs">⚙️</span>
-              <span className="hidden sm:inline">Engine</span>
-            </button>
-          </div>
-        </div>
-      </header>
+      {/* Subtle discreet engine settings button in top corner (replaces bulky header) */}
+      <div className="absolute top-4 right-4 sm:right-8 z-20">
+        <button
+          type="button"
+          onClick={() => setShowKeyModal(true)}
+          className="inline-flex items-center gap-1.5 rounded-full border border-[#ded5c6] bg-white/70 px-3 py-1 text-[11px] font-medium text-neutral-500 hover:text-black hover:bg-white hover:border-black/30 transition shadow-2xs cursor-pointer backdrop-blur-xs"
+          title="Configure AI Engine"
+        >
+          <span className="text-xs">⚙️</span>
+          <span className="hidden sm:inline">Engine</span>
+        </button>
+      </div>
 
       {/* Wardrobe Reminder Alert if Closet is empty */}
       {wardrobeCount === 0 && (
@@ -538,14 +560,12 @@ export default function StylistPage() {
         <div className="flex flex-1 flex-col items-center justify-center px-4 py-12 sm:py-20 animate-fade-in">
           <div className="w-full max-w-2xl text-center space-y-6">
             
-            {/* Title */}
-            <div className="space-y-2">
+            {/* Title & Animated Typewriter Tagline */}
+            <div className="space-y-2.5">
               <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-[#171717] font-serif">
                 What&apos;s on your mind today?
               </h2>
-              <p className="text-xs sm:text-sm text-[#736b5e] font-medium max-w-md mx-auto">
-                Ask Veya to curate an outfit, check color harmony, or craft personal style advice.
-              </p>
+              <AnimatedStylistTagline />
             </div>
 
             {/* Floating Capsule Input Bar */}
@@ -622,15 +642,15 @@ export default function StylistPage() {
               </form>
             </div>
 
-            {/* Quick Suggestion Chips */}
+            {/* Quick Suggestion Chips - Exactly 3 for perfect horizontal symmetry */}
             <div className="pt-2">
-              <div className="flex flex-wrap items-center justify-center gap-2">
+              <div className="flex flex-wrap items-center justify-center gap-2.5">
                 {STYLE_PROMPTS.map((item, idx) => (
                   <button
                     key={idx}
                     type="button"
                     onClick={() => sendMessage(item.prompt)}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-[#ded5c6] bg-white/80 px-3.5 py-2 text-xs font-medium text-[#4a4237] shadow-2xs transition hover:border-black/30 hover:bg-white hover:text-black hover:scale-[1.02] active:scale-95 cursor-pointer backdrop-blur-xs"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[#ded5c6] bg-white/80 px-4 py-2 text-xs font-medium text-[#4a4237] shadow-2xs transition hover:border-black/30 hover:bg-white hover:text-black hover:scale-[1.02] active:scale-95 cursor-pointer backdrop-blur-xs"
                   >
                     <span>{item.icon}</span>
                     <span>{item.label}</span>
@@ -644,6 +664,32 @@ export default function StylistPage() {
       ) : (
         /* ================= STATE B: ACTIVE CHAT CONVERSATION ================= */
         <div className="flex flex-1 flex-col justify-between pb-32">
+          {/* Active Chat Minimal Top Bar */}
+          <div className="sticky top-0 z-20 border-b border-[#e5dfd5]/60 bg-[#f4f0ea]/80 px-4 py-2.5 backdrop-blur-md">
+            <div className="mx-auto flex max-w-3xl items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#171717] text-xs text-white">
+                  ✦
+                </div>
+                <span className="text-xs font-bold text-[#171717]">Veya Chat</span>
+                {engineInfo && (
+                  <span className="text-[10px] text-neutral-500 hidden sm:inline">
+                    • {engineInfo.label}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={resetChat}
+                className="inline-flex items-center gap-1 rounded-xl border border-[#ded5c6] bg-white px-2.5 py-1 text-xs font-semibold text-[#524a3e] shadow-2xs hover:border-black/30 hover:bg-[#faf7f2] hover:text-black transition cursor-pointer"
+                title="Start a new chat"
+              >
+                <span>+</span>
+                <span>New Chat</span>
+              </button>
+            </div>
+          </div>
+
           {/* Chat Stream Messages */}
           <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 space-y-6">
             {messages.map((message, index) => {
