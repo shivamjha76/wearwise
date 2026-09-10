@@ -586,29 +586,11 @@ export default function WardrobePage() {
       <div className="mx-auto max-w-7xl">
         
         {/* ================= HEADER ================= */}
-        <div className="mb-8 border-b border-[#e2e4e7] pb-8">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">
-              My Digital Closet
-            </h1>
-            <AnimatedWardrobeTagline />
-          </div>
-
-          {/* Closet Breakdown Counters */}
-          <div className="mt-6 flex flex-wrap items-center gap-2">
-            <span className="rounded-xl border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-bold text-gray-900 shadow-2xs">
-              {counts.all} {counts.all === 1 ? "Item" : "Total Items"}
-            </span>
-            <span className="rounded-xl border border-gray-200 bg-white/80 px-3 py-1.5 text-xs font-medium text-gray-600">
-              👕 {counts.top} Tops
-            </span>
-            <span className="rounded-xl border border-gray-200 bg-white/80 px-3 py-1.5 text-xs font-medium text-gray-600">
-              👖 {counts.bottom} Bottoms
-            </span>
-            <span className="rounded-xl border border-gray-200 bg-white/80 px-3 py-1.5 text-xs font-medium text-gray-600">
-              👟 {counts.footwear} Footwear
-            </span>
-          </div>
+        <div className="mb-8">
+          <h1 className="text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">
+            My Digital Closet
+          </h1>
+          <AnimatedWardrobeTagline />
         </div>
 
         {/* ================= 1. FULL-WIDTH HORIZONTAL ADD CLOTHING STUDIO ================= */}

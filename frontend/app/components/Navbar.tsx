@@ -130,14 +130,9 @@ export default function Navbar() {
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-black text-white text-base font-extrabold shadow-xs transition-transform group-hover:scale-105">
               W
             </div>
-            <div className="flex flex-col">
-              <span className="text-xl font-black tracking-tight text-neutral-950 leading-none">
-                WearWise
-              </span>
-              <span className="text-[10px] font-semibold text-neutral-500 tracking-wider uppercase hidden sm:block">
-                AI Wardrobe
-              </span>
-            </div>
+            <span className="text-xl font-black tracking-tight text-neutral-950 leading-none">
+              WearWise
+            </span>
           </Link>
 
           {/* ================= 2. DESKTOP / TABLET NAV LINKS ================= */}
