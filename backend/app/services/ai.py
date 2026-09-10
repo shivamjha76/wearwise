@@ -1,13 +1,15 @@
 import os
-
+from pathlib import Path
 from dotenv import load_dotenv
+
+APP_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(APP_DIR / ".env")
+load_dotenv()
 
 try:
     from openai import OpenAI
 except ModuleNotFoundError:  # pragma: no cover
     OpenAI = None
-
-load_dotenv()
 
 api_key = os.getenv("OPENAI_API_KEY")
 is_valid_key = bool(api_key and not api_key.startswith("your_") and len(api_key) > 20)
@@ -40,14 +42,11 @@ def explain_outfit(
     occasion: str,
     weather: str | None = None
 ) -> str:
-    if client is None:
-        return _heuristic_explanation(top, bottom, shoes, profile, occasion, weather)
-
     weather_desc = f"- Weather: {weather}" if weather else ""
 
-    prompt = f"""You are a helpful personal fashion assistant.
+    prompt = f"""You are a helpful personal fashion assistant for WearWise.
 
-Explain why this outfit was recommended.
+Explain why this outfit was curated and works harmoniously together.
 
 User:
 - Height: {getattr(profile, 'height', 'N/A')} cm
@@ -65,24 +64,44 @@ Outfit:
 - Bottom: {bottom.color} {bottom.fit or ''} {bottom.category}
 - Shoes: {shoes.color} {shoes.category}
 
-Give a short, practical explanation in 2-3 sentences.
+Give a polished, encouraging, and practical explanation in 2-3 sentences.
 Do not make medical or body-shaming claims.
-Do not say that an outfit is objectively good or bad."""
+Highlight color harmony, silhouette proportions, and context suitability."""
 
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a concise, perceptive personal fashion stylist assistant. Explain why an outfit works well in 2-3 sentences."
-                },
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=200
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as exc:
-        print("OpenAI outfit explanation failed, falling back to heuristics:", exc)
-        return _heuristic_explanation(top, bottom, shoes, profile, occasion, weather)
+    # 1. Primary: Google Gemini AI
+    gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if gemini_key and not gemini_key.startswith("your_") and len(gemini_key) > 15:
+        try:
+            from app.services.stylist import call_gemini_api
+            explanation = call_gemini_api(
+                api_key=gemini_key,
+                system_prompt="You are a perceptive personal fashion stylist for WearWise. Explain why an outfit works harmoniously in 2-3 concise sentences.",
+                message=prompt,
+                history=[]
+            )
+            if explanation:
+                return explanation
+        except Exception as e:
+            print("Gemini outfit explanation failed, trying fallbacks:", e)
+
+    # 2. Secondary: OpenAI
+    if client is not None:
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a concise, perceptive personal fashion stylist assistant. Explain why an outfit works well in 2-3 sentences."
+                    },
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=200
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as exc:
+            print("OpenAI outfit explanation failed, falling back to heuristics:", exc)
+
+    # 3. Fallback: Smart heuristic explanation
+    return _heuristic_explanation(top, bottom, shoes, profile, occasion, weather)

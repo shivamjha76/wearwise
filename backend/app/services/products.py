@@ -57,7 +57,7 @@ PRODUCTS = [
         "fit": "slim",
         "price": 1199,
         "brand": "WearWise Studio",
-        "image": "/products/black_casual_shirt.png"
+        "image": "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=600&auto=format&fit=crop&q=80"
     },
     {
         "id": 7,
@@ -67,7 +67,7 @@ PRODUCTS = [
         "fit": "regular",
         "price": 1099,
         "brand": "WearWise Studio",
-        "image": "/products/beige_casual_shirt.png"
+        "image": "https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=600&auto=format&fit=crop&q=80"
     },
     {
         "id": 8,
@@ -77,7 +77,7 @@ PRODUCTS = [
         "fit": "regular",
         "price": 1499,
         "brand": "WearWise Studio",
-        "image": "/products/classic_white_shirt.png"
+        "image": "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=600&auto=format&fit=crop&q=80"
     },
     {
         "id": 9,
@@ -87,7 +87,7 @@ PRODUCTS = [
         "fit": "relaxed",
         "price": 1299,
         "brand": "WearWise Studio",
-        "image": "/products/black_casual_shirt.png"
+        "image": "https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?w=600&auto=format&fit=crop&q=80"
     },
     {
         "id": 10,
@@ -97,7 +97,7 @@ PRODUCTS = [
         "fit": "regular",
         "price": 1899,
         "brand": "WearWise Footwear",
-        "image": "/products/classic_white_shirt.png"
+        "image": "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=600&auto=format&fit=crop&q=80"
     },
     {
         "id": 11,
@@ -107,7 +107,7 @@ PRODUCTS = [
         "fit": "regular",
         "price": 1999,
         "brand": "WearWise Footwear",
-        "image": "/products/black_casual_shirt.png"
+        "image": "https://images.unsplash.com/photo-1614252369475-531eba835eb1?w=600&auto=format&fit=crop&q=80"
     }
 ]
 

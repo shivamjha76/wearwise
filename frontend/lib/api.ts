@@ -28,6 +28,9 @@ export function getImageUrl(url?: string | null): string | null {
     return url;
   }
   const cleanPath = url.startsWith("/") ? url : `/${url}`;
+  if (cleanPath.startsWith("/products/")) {
+    return cleanPath;
+  }
   return `${API_BASE_URL}${cleanPath}`;
 }
 

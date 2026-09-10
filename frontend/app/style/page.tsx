@@ -295,7 +295,7 @@ export default function StylePage() {
       console.error(err);
       const msg = err instanceof Error ? err.message : "";
       if (msg === "Failed to fetch") {
-        setError("Unable to connect to backend server. Make sure FastAPI is running on http://127.0.0.1:8000.");
+        setError(`Unable to connect to backend server (${API_BASE_URL}). Please ensure the service is running.`);
       } else if (msg.includes("Wardrobe is empty") || msg.includes("Not enough wardrobe items")) {
         setError("Your wardrobe needs at least one top (t-shirt/shirt), one bottom (jeans/pants), and one pair of shoes/sneakers to curate a look.");
       } else {

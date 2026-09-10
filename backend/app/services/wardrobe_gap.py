@@ -87,7 +87,11 @@ def count_new_combinations_for_shoes(new_shoe_color: str, tops, bottoms) -> int:
         return max(count, 1) if available else 1
 
     for top, bottom in product(tops, bottoms):
-        if is_color_compatible(_get_val(top, "color"), _get_val(bottom, "color")):
+        top_color = _get_val(top, "color")
+        bottom_color = _get_val(bottom, "color")
+        if is_color_compatible(top_color, bottom_color) and (
+            is_color_compatible(new_shoe_color, bottom_color) or is_color_compatible(new_shoe_color, top_color)
+        ):
             count += 1
     return count
 

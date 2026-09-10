@@ -264,9 +264,12 @@ def _call_gemini_vision(image_bytes: bytes, mime_type: str = "image/jpeg") -> Op
     }
 
     models_to_try = [
-        "gemini-3-flash-preview",
+        "gemini-3.5-flash-lite",
+        "gemini-3.5-flash",
+        "gemini-3.6-flash",
         "gemini-3.1-flash-lite-preview",
-        "gemini-flash-latest"
+        "gemini-flash-lite-latest",
+        "gemini-3-flash-preview",
     ]
 
     import urllib.request
