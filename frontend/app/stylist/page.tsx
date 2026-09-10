@@ -107,7 +107,7 @@ export default function StylistPage() {
       {
         id: "welcome",
         role: "assistant",
-        content: `Hello **${user.name}**! 👋 I am your **WearWise Personal Stylist**.\n\nI'm powered with real-time access to your digital closet and style preferences. You can chat with me just like ChatGPT or Gemini!\n\nAsk me for:\n• *Outfit recommendations for dates, interviews, or parties*\n• *What colors look best together*\n• *How to style specific pieces from your closet*\n• *General fashion tips, rules, and grooming advice*`,
+        content: `Hello **${user.name}**! 👋 I am **Veya**, your personal WearWise stylist.\n\nI'm powered with real-time access to your digital closet and style preferences. You can chat with me freely!\n\nAsk me for:\n• *Outfit recommendations for dates, interviews, or parties*\n• *What colors look best together*\n• *How to style specific pieces from your closet*\n• *General fashion tips, rules, and grooming advice*`,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       },
     ]);
@@ -152,7 +152,7 @@ export default function StylistPage() {
       {
         id: `welcome-${Date.now()}`,
         role: "assistant",
-        content: `Hello **${currentUser.name}**! 👋 Ready for a fresh styling session.\n\nAsk me for outfit formulas, color harmony advice, or what to wear today!`,
+        content: `Hello **${currentUser.name}**! 👋 Veya is ready for a fresh styling session.\n\nAsk me for outfit formulas, color harmony advice, or what to wear today!`,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       },
     ]);
@@ -333,7 +333,7 @@ export default function StylistPage() {
           occasion: occasion || "casual",
           style_vibe: top.style || null,
           score: 95,
-          explanation: `Curated by AI Stylist: ${top.color} ${top.category} + ${bottom.color} ${bottom.category} + ${shoes.color} ${shoes.category}`,
+          explanation: `Curated by Veya: ${top.color} ${top.category} + ${bottom.color} ${bottom.category} + ${shoes.color} ${shoes.category}`,
         }),
       });
 
@@ -373,12 +373,15 @@ export default function StylistPage() {
               ✦
             </div>
             <div>
-              <h1 className="text-base font-extrabold tracking-tight text-[#1a1714] sm:text-lg">
-                WearWise Stylist
+              <h1 className="text-base font-extrabold tracking-tight text-[#1a1714] sm:text-lg flex items-center gap-1.5">
+                <span>Veya</span>
+                <span className="rounded-full bg-black/10 px-2 py-0.5 text-[9px] font-bold tracking-wider uppercase text-neutral-800">
+                  AI Stylist
+                </span>
               </h1>
               {engineInfo && (
                 <p className="text-[10px] font-medium text-gray-500">
-                  Powered by {engineInfo.label}
+                  Your Personal Stylist • Powered by {engineInfo.label}
                 </p>
               )}
             </div>
@@ -448,7 +451,7 @@ export default function StylistPage() {
                         )}
                         {message.engine && (
                           <span className="text-[10px] font-medium text-gray-400 capitalize">
-                            ✦ {message.engine === "gemini" ? "Gemini" : message.engine === "openai" ? "OpenAI" : "AI Stylist"}
+                            ✦ {message.engine === "gemini" ? "Veya (Gemini)" : message.engine === "openai" ? "Veya (OpenAI)" : "Veya AI"}
                           </span>
                         )}
                       </div>
@@ -622,7 +625,7 @@ export default function StylistPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask your stylist anything (e.g. 'hey', 'what goes with olive chinos?', 'date night outfit')..."
+                placeholder="Ask Veya anything (e.g. 'hey Veya', 'what goes with olive chinos?', 'style a date night look')..."
                 disabled={loading}
                 className="min-h-[48px] max-h-32 w-full resize-none rounded-2xl border border-[#e2dad0] bg-white px-4 py-3 text-xs sm:text-sm text-gray-900 placeholder:text-[#9e9588] outline-none transition focus:border-black focus:bg-white focus:ring-1 focus:ring-black leading-relaxed shadow-2xs"
               />
@@ -647,7 +650,7 @@ export default function StylistPage() {
               <div className="flex items-center gap-2.5">
                 <span className="text-xl">🔑</span>
                 <div>
-                  <h2 className="text-base font-extrabold text-gray-950">Connect AI Chatbot</h2>
+                  <h2 className="text-base font-extrabold text-gray-950">Connect Veya AI</h2>
                   <p className="text-[11px] text-gray-500">Enable real-time dynamic AI dialogue</p>
                 </div>
               </div>

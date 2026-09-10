@@ -91,10 +91,10 @@ export default function Navbar() {
       desc: "Instant look combinations",
     },
     {
-      name: "AI Stylist",
+      name: "Veya AI",
       href: "/stylist",
       icon: Sparkles,
-      desc: "Conversational styling assistant",
+      desc: "Chat with your personal AI stylist",
       badge: "AI",
     },
     {

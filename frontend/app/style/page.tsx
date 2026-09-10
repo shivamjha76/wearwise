@@ -708,7 +708,7 @@ export default function StylePage() {
                   <div className="mt-4 rounded-2xl bg-[#fffaf0] border border-[#f5e3ba] p-4 min-h-[90px]">
                     <div className="flex items-center justify-between mb-1.5">
                       <p className="text-xs text-amber-900 font-bold flex items-center gap-1.5">
-                        <span>✨</span> Stylist Rationale
+                        <span>✨</span> Veya&apos;s Rationale
                       </p>
                       <span className="text-[10px] font-semibold text-amber-800/70 uppercase tracking-wider">
                         AI Curated

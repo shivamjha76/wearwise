@@ -309,7 +309,7 @@ export default function SavedOutfitsPage() {
               Your Lookbook is empty
             </h2>
             <p className="mx-auto mt-1 max-w-md text-xs sm:text-sm text-gray-500 leading-relaxed">
-              Whenever you generate an outfit you love in <strong>Style Me</strong> or via the <strong>AI Stylist</strong>, tap <span className="font-semibold text-black">&quot;Save Outfit&quot;</span> to keep it archived here.
+              Whenever you generate an outfit you love in <strong>Style Me</strong> or via <strong>Veya AI</strong>, tap <span className="font-semibold text-black">&quot;Save Outfit&quot;</span> to keep it archived here.
             </p>
             <div className="mt-6">
               <Link

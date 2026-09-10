@@ -44,7 +44,7 @@ def get_active_engine_info() -> Dict[str, Any]:
     if is_valid_key(groq_key):
         return {"engine": "groq", "label": "Groq Llama 3.3", "online": True}
 
-    return {"engine": "wearwise_ai", "label": "WearWise AI Engine", "online": True}
+    return {"engine": "wearwise_ai", "label": "Veya AI Engine", "online": True}
 
 
 def save_api_key(provider: str, key: str) -> Dict[str, Any]:
@@ -277,9 +277,9 @@ def generate_conversational_reply(
     # 1. GREETINGS
     if intent == "greeting":
         greetings = [
-            f"{greeting_prefix}Great to see you! I'm your **WearWise AI Stylist**.\n\nHow can I help you today? You can ask me:\n• *\"What should I wear for a dinner date?\"*\n• *\"What colors pair best with beige chinos?\"*\n• *\"How should I style my sneakers?\"*\n• *\"Put together a casual outfit from my closet\"*",
-            f"{greeting_prefix}Hope you're having an awesome day! I'm ready to help you look your best.\n\nAre you dressing for a specific event today, or looking for style tips from your wardrobe?",
-            f"Hello{(' ' + clean_name) if clean_name else ''}! ✨ I'm your personal wardrobe stylist.\n\nWhether you need an outfit formula for work, an evening outing, or just want to explore fresh color combinations, let me know what you're thinking!"
+            f"{greeting_prefix}Great to see you! I'm **Veya**, your personal WearWise AI stylist.\n\nHow can I help you today? You can ask me:\n• *\"What should I wear for a dinner date?\"*\n• *\"What colors pair best with beige chinos?\"*\n• *\"How should I style my sneakers?\"*\n• *\"Put together a casual outfit from my closet\"*",
+            f"{greeting_prefix}Hope you're having an awesome day! I'm **Veya**, and I'm ready to help you look your best.\n\nAre you dressing for a specific event today, or looking for style tips from your wardrobe?",
+            f"Hello{(' ' + clean_name) if clean_name else ''}! ✨ I'm **Veya**, your personal WearWise stylist.\n\nWhether you need an outfit formula for work, an evening outing, or just want to explore fresh color combinations, let me know what you're thinking!"
         ]
         return random.choice(greetings), [], None
 
@@ -294,7 +294,7 @@ def generate_conversational_reply(
     # 3. IDENTITY / WHO ARE YOU
     if intent == "identity":
         return (
-            f"I am your **WearWise AI Stylist** ✦ — your dedicated personal fashion consultant and digital wardrobe companion.\n\n"
+            f"I am **Veya** ✦ — your dedicated personal fashion consultant and WearWise digital wardrobe companion.\n\n"
             f"### Here is what I can do:\n"
             f"• **Closet Intelligence:** I know the garments in your digital wardrobe vault and match them to your personal aesthetic.\n"
             f"• **Context Styling:** I create outfits tailored for interviews, dates, college, gym, parties, or casual days.\n"
@@ -750,7 +750,8 @@ def get_stylist_reply(
         if profile else "Profile not yet filled."
     )
 
-    system_prompt = f"""You are WearWise AI Stylist, an intelligent, modern, encouraging, and highly versatile conversational AI chatbot (like ChatGPT and Gemini) with deep expertise in fashion, wardrobe styling, and lifestyle aesthetics.
+    system_prompt = f"""You are Veya, an intelligent, modern, encouraging, and highly versatile personal fashion stylist and conversational AI companion for WearWise.
+When asked who you are or what your name is, your name is Veya!
 You are chatting with {user_name}.
 
 USER'S STYLE PROFILE:
