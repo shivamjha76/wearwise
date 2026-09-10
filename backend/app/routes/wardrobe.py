@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.user import User
 from app.models.wardrobe import WardrobeItem
 from app.models.uploaded_file import UploadedFile
+from app.models.style_profile import StyleProfile
 from app.schemas.wardrobe import (
     WardrobeItemCreate,
     WardrobeItemResponse
@@ -324,6 +325,7 @@ def next_purchase(
     store: str | None = None,
     max_price: int | None = None,
     q: str | None = None,
+    gender: str | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -341,17 +343,29 @@ def next_purchase(
             detail="User not found"
         )
 
+    # Resolve user gender from profile or query param
+    profile = db.query(StyleProfile).filter(StyleProfile.user_id == user_id).first()
+    raw_gender = gender or (profile.gender if profile and profile.gender else getattr(current_user, "gender", None) or getattr(user, "gender", None) or "male")
+    ug = (raw_gender or "male").lower().strip()
+    if ug in ["female", "woman", "women", "f"]:
+        resolved_gender = "women"
+    elif ug in ["male", "man", "men", "m"]:
+        resolved_gender = "men"
+    else:
+        resolved_gender = "all"
+
     wardrobe = (
         db.query(WardrobeItem)
         .filter(WardrobeItem.user_id == user_id)
         .all()
     )
 
-    recommendations = recommend_next_item(wardrobe)
+    recommendations = recommend_next_item(wardrobe, gender=resolved_gender)
 
     if not recommendations:
         return {
             "user_id": user_id,
+            "gender": resolved_gender,
             "recommendations": []
         }
 
@@ -362,6 +376,7 @@ def next_purchase(
             category=cat,
             color=col,
             store_filter=store,
+            gender_filter=resolved_gender,
             max_price=max_price,
             limit=4
         )
@@ -374,7 +389,12 @@ def next_purchase(
         recommendation["products"] = store_products
 
     # Build complete curated catalog with wardrobe match indicators and live web search
-    all_catalog = get_all_catalog_products(store_filter=store, max_price=max_price, search_query=q)
+    all_catalog = get_all_catalog_products(
+        store_filter=store,
+        max_price=max_price,
+        gender_filter=resolved_gender,
+        search_query=q
+    )
     
     missing_targets = {
         (r.get("category", "").lower(), r.get("color", "").lower()): r.get("new_outfit_combinations", 0)
@@ -391,6 +411,7 @@ def next_purchase(
 
     return {
         "user_id": user_id,
+        "gender": resolved_gender,
         "recommendations": recommendations,
         "all_products": all_catalog
     }

@@ -96,7 +96,7 @@ def count_new_combinations_for_shoes(new_shoe_color: str, tops, bottoms) -> int:
     return count
 
 
-def recommend_next_item(wardrobe):
+def recommend_next_item(wardrobe, gender: str = "men"):
     if not wardrobe:
         return []
 
@@ -178,13 +178,18 @@ def recommend_next_item(wardrobe):
                 })
 
     if not recommendations:
+        shirt_reason = (
+            "A crisp white shirt is a versatile, foundational piece that pairs effortlessly across skirts, denim, and trousers."
+            if gender == "women"
+            else "A crisp white button-down shirt is the most versatile foundational piece in menswear."
+        )
         recommendations = [
             {
                 "category": "shirt",
                 "color": "white",
                 "score": 95,
                 "new_outfit_combinations": 5,
-                "reason": "A crisp white button-down shirt is the most versatile foundational piece in menswear."
+                "reason": shirt_reason
             },
             {
                 "category": "pants",

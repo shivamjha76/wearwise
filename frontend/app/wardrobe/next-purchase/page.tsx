@@ -76,6 +76,10 @@ const POPULAR_BRANDS = [
   "Red Tape",
   "Max",
   "Roadster",
+  "Kotty",
+  "El Paso",
+  "Kraus",
+  "Timex",
   "Cava",
   "Calvin Klein",
   "Mast & Harbour",
@@ -162,6 +166,9 @@ export default function ShopPage() {
 
     try {
       const url = new URL(`${API_BASE_URL}/wardrobe/${user.id}/next-purchase`);
+      if (user.gender) {
+        url.searchParams.set("gender", user.gender);
+      }
       if (queryParam && queryParam.trim().length >= 3) {
         url.searchParams.set("q", queryParam.trim());
       }
