@@ -734,16 +734,16 @@ export default function StylistPage() {
       )}
 
       {/* ================= MAIN CHAT / CONTENT AREA ================= */}
-      <div className="flex-1 flex flex-col h-full overflow-y-auto relative transition-all duration-300 ease-in-out">
+      <div className="flex-1 flex flex-col h-full relative overflow-hidden transition-all duration-300 ease-in-out">
         {/* Ambient warm background glow */}
         <div className="pointer-events-none absolute -top-40 left-1/2 -z-10 h-[500px] w-[900px] -translate-x-1/2 rounded-full bg-gradient-to-b from-[#e7ded1]/70 via-[#f5efe6]/40 to-transparent blur-3xl" />
 
-        {/* Floating Sidebar Toggle Button when sidebar is closed (ChatGPT style [| ] icon) */}
+        {/* FIXED Floating Sidebar Toggle Button (permanently visible regardless of chat scroll) */}
         {!isSidebarOpen && (
           <button
             type="button"
             onClick={() => setIsSidebarOpen(true)}
-            className="absolute top-4 left-4 z-20 flex h-9 w-9 items-center justify-center rounded-xl border border-[#ded5c6] bg-white/90 text-[#171717] shadow-2xs backdrop-blur-xs hover:border-black/30 hover:bg-white transition cursor-pointer active:scale-95"
+            className="absolute top-4 left-4 z-30 flex h-9 w-9 items-center justify-center rounded-xl border border-[#ded5c6] bg-white/95 text-[#171717] shadow-sm backdrop-blur-md hover:border-black/40 hover:bg-white hover:scale-105 active:scale-95 transition cursor-pointer"
             title="Open sidebar"
           >
             <svg className="w-4 h-4 text-neutral-800" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -752,6 +752,9 @@ export default function StylistPage() {
             </svg>
           </button>
         )}
+
+        {/* Scrollable Chat Area */}
+        <div className="flex-1 flex flex-col h-full overflow-y-auto w-full">
 
         {/* Wardrobe Reminder Alert if Closet is empty */}
         {wardrobeCount === 0 && (
@@ -1309,6 +1312,7 @@ export default function StylistPage() {
             </div>
           </div>
         )}
+        </div>
       </div>
     </main>
   );
