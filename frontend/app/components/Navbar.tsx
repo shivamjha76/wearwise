@@ -77,7 +77,13 @@ export default function Navbar() {
     router.push("/login");
   };
 
-  const navLinks = [
+  const navLinks: {
+    name: string;
+    href: string;
+    icon: any;
+    desc: string;
+    badge?: string;
+  }[] = [
     {
       name: "Wardrobe",
       href: "/wardrobe",
@@ -95,7 +101,6 @@ export default function Navbar() {
       href: "/stylist",
       icon: Sparkles,
       desc: "Chat with your personal AI stylist",
-      badge: "AI",
     },
     {
       name: "Lookbook",
