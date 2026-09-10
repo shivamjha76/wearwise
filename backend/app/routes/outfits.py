@@ -8,7 +8,7 @@ from app.models.wardrobe import WardrobeItem
 from app.models.outfit import SavedOutfit
 from app.schemas.outfit import SavedOutfitCreate, SavedOutfitResponse
 from app.services.recommendation import generate_outfits
-from app.services.ai import explain_outfit
+from app.services.ai import explain_outfit, get_harmonic_breakdown
 from app.core.dependencies import get_current_user
 
 router = APIRouter(prefix="/outfits", tags=["Outfits"])
@@ -20,6 +20,7 @@ def get_outfits(
     occasion: str,
     style_vibe: str | None = None,
     weather: str | None = None,
+    shuffle: bool = False,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -53,7 +54,7 @@ def get_outfits(
     if not wardrobe:
         raise HTTPException(status_code=400, detail="Wardrobe is empty")
 
-    outfits = generate_outfits(wardrobe, profile, occasion, style_vibe, weather)
+    outfits = generate_outfits(wardrobe, profile, occasion, style_vibe, weather, limit=6, shuffle=shuffle)
 
     if not outfits:
         raise HTTPException(
@@ -61,7 +62,7 @@ def get_outfits(
         )
 
     recommendations = []
-    for o in outfits[:3]:
+    for i, o in enumerate(outfits[:5]):
         o_top = o["top"]
         o_bottom = o["bottom"]
         o_shoes = o["shoes"]
@@ -70,12 +71,15 @@ def get_outfits(
         except Exception:
             o_explanation = "AI explanation unavailable"
 
+        breakdown = get_harmonic_breakdown(o_top, o_bottom, o_shoes, profile, occasion, weather)
+
         recommendations.append({
             "top_id": o_top.id,
             "bottom_id": o_bottom.id,
             "shoes_id": o_shoes.id,
             "score": o["score"],
             "explanation": o_explanation,
+            "harmonic_breakdown": breakdown,
         })
 
     best_rec = recommendations[0]
@@ -87,6 +91,7 @@ def get_outfits(
         "weather": weather,
         "recommendation": best_rec,
         "explanation": best_rec["explanation"],
+        "harmonic_breakdown": best_rec.get("harmonic_breakdown", {}),
         "recommendations": recommendations,
     }
 

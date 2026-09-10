@@ -17,12 +17,20 @@ type WardrobeItem = {
   image_url: string | null;
 };
 
+type HarmonicBreakdown = {
+  color_contrast: string;
+  silhouette_balance: string;
+  weather_rating: string;
+  style_vibe: string;
+};
+
 type Recommendation = {
   top_id: number;
   bottom_id: number;
   shoes_id: number;
   score: number;
   explanation?: string;
+  harmonic_breakdown?: HarmonicBreakdown;
 };
 
 type OutfitResponse = {
@@ -31,7 +39,105 @@ type OutfitResponse = {
   recommendation: Recommendation;
   recommendations?: Recommendation[];
   explanation?: string;
+  harmonic_breakdown?: HarmonicBreakdown;
 };
+
+function TypewriterText({ text, speed = 16 }: { text: string; speed?: number }) {
+  const [displayedText, setDisplayedText] = useState("");
+  const [isTyping, setIsTyping] = useState(true);
+
+  useEffect(() => {
+    setDisplayedText("");
+    setIsTyping(true);
+    if (!text) return;
+
+    let currentIndex = 0;
+    const interval = setInterval(() => {
+      if (currentIndex < text.length) {
+        setDisplayedText(text.slice(0, currentIndex + 1));
+        currentIndex++;
+      } else {
+        setIsTyping(false);
+        clearInterval(interval);
+      }
+    }, speed);
+
+    return () => clearInterval(interval);
+  }, [text, speed]);
+
+  return (
+    <span>
+      {displayedText}
+      {isTyping && (
+        <span className="inline-block w-[2px] h-3.5 bg-amber-700 align-middle animate-pulse ml-0.5" />
+      )}
+    </span>
+  );
+}
+
+function resolveHarmonicBreakdown(
+  rec?: Recommendation,
+  top?: WardrobeItem,
+  bottom?: WardrobeItem,
+  weather?: string,
+  occasion?: string
+): HarmonicBreakdown {
+  if (rec?.harmonic_breakdown && rec.harmonic_breakdown.color_contrast) {
+    return rec.harmonic_breakdown;
+  }
+
+  const topCol = (top?.color || "").toLowerCase();
+  const botCol = (bottom?.color || "").toLowerCase();
+  const topFit = (top?.fit || "regular").toLowerCase();
+  const botFit = (bottom?.fit || "regular").toLowerCase();
+
+  let colorContrast = "Complementary Dual-Tone";
+  if (topCol === botCol && ["black", "grey", "blue", "beige"].includes(topCol)) {
+    colorContrast = "Monochromatic Elegance";
+  } else if ((topCol === "white" && botCol === "black") || (topCol === "black" && botCol === "white")) {
+    colorContrast = "High-Contrast Classic";
+  } else if (["white", "black", "grey"].includes(topCol) && ["blue", "navy"].includes(botCol)) {
+    colorContrast = "Timeless Indigo Anchor";
+  } else if (["beige", "brown", "olive"].includes(topCol) || ["beige", "brown", "olive"].includes(botCol)) {
+    colorContrast = "Warm Earthy Harmony";
+  } else if (["white", "black", "beige", "grey"].includes(topCol) && ["white", "black", "beige", "grey"].includes(botCol)) {
+    colorContrast = "Clean Neutral Balance";
+  }
+
+  let silhouette = "Balanced Classic Proportion";
+  if (topFit.includes("oversized") || topFit.includes("relaxed")) {
+    silhouette = botFit.includes("slim") || botFit.includes("regular")
+      ? "Relaxed Top / Tapered Bottom"
+      : "Contemporary Relaxed Drape";
+  } else if (topFit.includes("slim")) {
+    silhouette = "Streamlined Tailored Silhouette";
+  }
+
+  const w = (weather || "warm").toLowerCase();
+  let weatherRating = "Transitional Mild Layering";
+  if (w === "warm" || w === "hot") {
+    weatherRating = "Light & Breathable Comfort";
+  } else if (w === "cold" || w === "chilly") {
+    weatherRating = "Structured Thermal Comfort";
+  }
+
+  const occ = (occasion || "casual").toLowerCase();
+  const vibes: Record<string, string> = {
+    date: "Romantic Sophistication",
+    interview: "Professional Polish",
+    party: "Sharp Night-Out Edge",
+    college: "Effortless Streetwise",
+    casual: "Relaxed Everyday Chic",
+  };
+  const styleVibe = vibes[occ] || "Versatile Smart Casual";
+
+  return {
+    color_contrast: colorContrast,
+    silhouette_balance: silhouette,
+    weather_rating: weatherRating,
+    style_vibe: styleVibe,
+  };
+}
 
 type LiveWeatherData = {
   status: string;
@@ -244,22 +350,29 @@ export default function StylePage() {
     }
   }, [router]);
 
-  const generateOutfit = async () => {
+  const [shuffling, setShuffling] = useState(false);
+
+  const generateOutfit = async (isShuffle: boolean = false) => {
     const user = getStoredUser();
     if (!user) {
       router.push("/login");
       return;
     }
 
-    setLoading(true);
+    if (isShuffle) {
+      setShuffling(true);
+    } else {
+      setLoading(true);
+    }
     setError("");
     setSaveStatus("idle");
     setSaveMessage("");
 
     try {
+      const shuffleParam = isShuffle ? "&shuffle=true" : "";
       const [outfitResponse, wardrobeResponse] = await Promise.all([
         fetch(
-          `${API_BASE_URL}/outfits/${user.id}?occasion=${occasion}&style_vibe=${styleVibe}&weather=${weather}`,
+          `${API_BASE_URL}/outfits/${user.id}?occasion=${occasion}&style_vibe=${styleVibe}&weather=${weather}${shuffleParam}`,
           {
             method: "POST",
             headers: getAuthHeaders(),
@@ -285,6 +398,7 @@ export default function StylePage() {
 
       setOutfit(outfitData);
       setWardrobe(wardrobeData);
+      setSelectedLookIdx(0);
 
       localStorage.setItem("wearwise_recommendation", JSON.stringify(outfitData));
       localStorage.setItem(
@@ -303,10 +417,28 @@ export default function StylePage() {
       }
     } finally {
       setLoading(false);
+      setShuffling(false);
     }
   };
 
   const [selectedLookIdx, setSelectedLookIdx] = useState(0);
+
+  const handleShuffle = async () => {
+    if (shuffling || loading) return;
+    setSaveStatus("idle");
+    setSaveMessage("");
+
+    if (recommendationsList.length > 1 && selectedLookIdx + 1 < recommendationsList.length) {
+      setShuffling(true);
+      setTimeout(() => {
+        setSelectedLookIdx((prev) => prev + 1);
+        setShuffling(false);
+      }, 200);
+    } else {
+      setSelectedLookIdx(0);
+      await generateOutfit(true);
+    }
+  };
 
   const getWardrobeItem = (id: number) => {
     return wardrobe.find((item) => item.id === id);
@@ -327,6 +459,7 @@ export default function StylePage() {
   const shoes = activeRec ? getWardrobeItem(activeRec.shoes_id) : undefined;
   const activeExplanation =
     activeRec?.explanation || outfit?.explanation || "AI explanation unavailable";
+  const harmonic = resolveHarmonicBreakdown(activeRec, top, bottom, weather, occasion);
 
   const saveOutfit = async () => {
     const user = getStoredUser();
@@ -417,7 +550,7 @@ export default function StylePage() {
             </p>
             <button
               type="button"
-              onClick={generateOutfit}
+              onClick={() => generateOutfit(false)}
               disabled={loading}
               className="flex h-11 w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-[#171717] px-8 text-xs font-bold text-white shadow-sm transition hover:bg-black active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shrink-0"
             >
@@ -518,45 +651,27 @@ export default function StylePage() {
                   </div>
                 </div>
 
-                {/* Multiple Look Formula Selector Tabs */}
-                {recommendationsList.length > 1 && (
-                  <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none border-b border-[#eceef0] pb-3.5">
-                    {recommendationsList.map((rec, rIdx) => {
-                      const isSelected = selectedLookIdx === rIdx;
-                      const label =
-                        rIdx === 0
-                          ? "Look 1: Top Match"
-                          : rIdx === 1
-                          ? "Look 2: Alternative"
-                          : `Look ${rIdx + 1}: Casual`;
-                      return (
-                        <button
-                          key={rIdx}
-                          type="button"
-                          onClick={() => {
-                            setSelectedLookIdx(rIdx);
-                            setSaveStatus("idle");
-                            setSaveMessage("");
-                          }}
-                          className={`flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                            isSelected
-                              ? "bg-[#171717] text-white shadow-2xs"
-                              : "border border-gray-200 bg-[#fbfbf9] text-gray-700 hover:border-gray-400 hover:bg-white"
-                          }`}
-                        >
-                          <span>{label}</span>
-                          <span
-                            className={`rounded-full px-1.5 py-0.2 text-[10px] ${
-                              isSelected ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"
-                            }`}
-                          >
-                            {rec.score}%
-                          </span>
-                        </button>
-                      );
-                    })}
+                {/* Shuffle Outfit Action Bar */}
+                <div className="mt-4 flex items-center justify-between rounded-2xl bg-[#fbfbf9] border border-[#eceef0] p-3 px-4">
+                  <div className="flex items-center gap-2 text-xs text-gray-700">
+                    <span className="text-base">🔀</span>
+                    <span className="font-semibold">Looking for another combination?</span>
+                    {recommendationsList.length > 1 && (
+                      <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-bold text-gray-700">
+                        {selectedLookIdx + 1} of {recommendationsList.length}
+                      </span>
+                    )}
                   </div>
-                )}
+                  <button
+                    type="button"
+                    onClick={handleShuffle}
+                    disabled={shuffling || loading}
+                    className="flex items-center gap-2 rounded-xl bg-[#171717] px-4 py-2 text-xs font-bold text-white shadow-2xs transition hover:bg-black active:scale-95 disabled:opacity-50 cursor-pointer"
+                  >
+                    <span className={`inline-block ${shuffling ? "animate-spin" : ""}`}>⟳</span>
+                    <span>{shuffling ? "Shuffling..." : "Shuffle Outfit"}</span>
+                  </button>
+                </div>
 
                 {/* 3 Pieces Grid */}
                 <div className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -587,10 +702,17 @@ export default function StylePage() {
                   </div>
 
                   {/* AI Explanation Quote */}
-                  <div className="mt-4 rounded-2xl bg-[#fffaf0] border border-[#f5e3ba] p-4">
-                    <p className="text-xs text-amber-900 font-bold mb-1">Stylist Rationale</p>
-                    <p className="text-xs leading-relaxed text-gray-700">
-                      &ldquo;{activeExplanation}&rdquo;
+                  <div className="mt-4 rounded-2xl bg-[#fffaf0] border border-[#f5e3ba] p-4 min-h-[90px]">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-xs text-amber-900 font-bold flex items-center gap-1.5">
+                        <span>✨</span> Stylist Rationale
+                      </p>
+                      <span className="text-[10px] font-semibold text-amber-800/70 uppercase tracking-wider">
+                        AI Curated
+                      </span>
+                    </div>
+                    <p className="text-xs leading-relaxed text-gray-700 italic">
+                      &ldquo;<TypewriterText text={activeExplanation} />&rdquo;
                     </p>
                   </div>
 
@@ -601,7 +723,7 @@ export default function StylePage() {
                         <span>🎨</span>
                         <span className="font-semibold text-gray-800">Color Contrast</span>
                       </div>
-                      <span className="font-bold text-emerald-700">Optimal Tonal Ratio</span>
+                      <span className="font-bold text-gray-900">{harmonic.color_contrast}</span>
                     </div>
 
                     <div className="flex items-center justify-between">
@@ -610,7 +732,7 @@ export default function StylePage() {
                         <span className="font-semibold text-gray-800">Silhouette Balance</span>
                       </div>
                       <span className="font-bold text-gray-900 capitalize">
-                        {top.fit || "Relaxed"} / {bottom.fit || "Standard"}
+                        {harmonic.silhouette_balance}
                       </span>
                     </div>
 
@@ -620,67 +742,24 @@ export default function StylePage() {
                         <span className="font-semibold text-gray-800">Weather Rating</span>
                       </div>
                       <span className="font-bold text-gray-900 capitalize">
-                        {weather} Comfort
+                        {harmonic.weather_rating}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span>🌿</span>
-                        <span className="font-semibold text-gray-800">Wardrobe Owned</span>
+                        <span>💫</span>
+                        <span className="font-semibold text-gray-800">Occasion Vibe</span>
                       </div>
-                      <span className="font-bold text-emerald-700">100% In Closet</span>
+                      <span className="font-bold text-emerald-700">
+                        {harmonic.style_vibe}
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Next Purchase Shortcut */}
-                <div className="mt-6 border-t border-[#eceef0] pt-4">
-                  <Link
-                    href="/wardrobe/next-purchase"
-                    className="flex items-center justify-between rounded-xl bg-[#fbfbf9] p-3 text-xs border border-[#e2e4e7] hover:border-black/30 transition group"
-                  >
-                    <div>
-                      <p className="font-bold text-gray-900">Want higher versatility?</p>
-                      <p className="text-[11px] text-gray-500">Discover your next purchase multiplier</p>
-                    </div>
-                    <span className="text-sm transition-transform group-hover:translate-x-1">→</span>
-                  </Link>
-                </div>
-
               </div>
 
-            </div>
-
-            {/* Bottom Quick-Action Bar */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl border border-[#e2e4e7] bg-white p-5 shadow-2xs">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">🪄</span>
-                <div>
-                  <p className="text-xs font-bold text-gray-900">
-                    Looking for a different direction?
-                  </p>
-                  <p className="text-[11px] text-gray-500">
-                    Switch the occasion or tap below to generate alternative combinations.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2.5">
-                <button
-                  type="button"
-                  onClick={generateOutfit}
-                  className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-xs font-bold text-gray-800 hover:bg-gray-50 transition cursor-pointer"
-                >
-                  ⟳ Re-shuffle Look
-                </button>
-                <Link
-                  href="/stylist"
-                  className="rounded-xl bg-[#171717] px-4 py-2.5 text-xs font-bold text-white hover:bg-black transition"
-                >
-                  Ask AI Stylist 💬
-                </Link>
-              </div>
             </div>
 
           </div>
@@ -698,7 +777,7 @@ export default function StylePage() {
 
             <button
               type="button"
-              onClick={generateOutfit}
+              onClick={() => generateOutfit(false)}
               className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#171717] px-8 py-3 text-xs font-bold text-white shadow-sm transition hover:bg-black active:scale-95 cursor-pointer"
             >
               <span>Generate My Outfit</span>

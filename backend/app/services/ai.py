@@ -42,31 +42,25 @@ def explain_outfit(
     occasion: str,
     weather: str | None = None
 ) -> str:
-    weather_desc = f"- Weather: {weather}" if weather else ""
+    prompt = f"""You are a personal fashion stylist for WearWise.
 
-    prompt = f"""You are a helpful personal fashion assistant for WearWise.
+Explain why this outfit combination looks great together.
 
-Explain why this outfit was curated and works harmoniously together.
-
-User:
-- Height: {getattr(profile, 'height', 'N/A')} cm
-- Weight: {getattr(profile, 'weight', 'N/A')} kg
-- Skin tone: {getattr(profile, 'skin_tone', 'medium')}
-- Preferred style: {getattr(profile, 'style_preference', 'casual')}
-- Preferred fit: {getattr(profile, 'fit_preference', 'regular')}
-
-Occasion:
-{occasion}
+Context:
+- User complexion / skin tone: {getattr(profile, 'skin_tone', 'neutral')}
+- Occasion: {occasion}
 {weather_desc}
 
-Outfit:
+Garments:
 - Top: {top.color} {top.fit or ''} {top.category}
 - Bottom: {bottom.color} {bottom.fit or ''} {bottom.category}
 - Shoes: {shoes.color} {shoes.category}
 
-Give a polished, encouraging, and practical explanation in 2-3 sentences.
-Do not make medical or body-shaming claims.
-Highlight color harmony, silhouette proportions, and context suitability."""
+RULES:
+- Maximum 2 to 3 short sentences ONLY.
+- Write in simple, natural, conversational English that anyone can easily understand.
+- Do NOT use complex words, bullet points, markdown quotes, or lists.
+- Directly explain why these colors and fits look sharp together for this {occasion}."""
 
     # 1. Primary: Google Gemini AI
     gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
@@ -75,12 +69,13 @@ Highlight color harmony, silhouette proportions, and context suitability."""
             from app.services.stylist import call_gemini_api
             explanation = call_gemini_api(
                 api_key=gemini_key,
-                system_prompt="You are a perceptive personal fashion stylist for WearWise. Explain why an outfit works harmoniously in 2-3 concise sentences.",
+                system_prompt="You are a friendly personal fashion stylist for WearWise. Write strictly 2 to 3 short, easy-to-read sentences in simple English explaining why an outfit works.",
                 message=prompt,
                 history=[]
             )
             if explanation:
-                return explanation
+                clean_exp = explanation.strip().strip('"\'')
+                return clean_exp
         except Exception as e:
             print("Gemini outfit explanation failed, trying fallbacks:", e)
 
@@ -92,16 +87,80 @@ Highlight color harmony, silhouette proportions, and context suitability."""
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a concise, perceptive personal fashion stylist assistant. Explain why an outfit works well in 2-3 sentences."
+                        "content": "You are a concise, perceptive personal fashion stylist assistant. Write strictly 2 to 3 short sentences in simple English."
                     },
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.7,
-                max_tokens=200
+                max_tokens=150
             )
-            return response.choices[0].message.content.strip()
+            return response.choices[0].message.content.strip().strip('"\'')
         except Exception as exc:
             print("OpenAI outfit explanation failed, falling back to heuristics:", exc)
 
     # 3. Fallback: Smart heuristic explanation
-    return _heuristic_explanation(top, bottom, shoes, profile, occasion, weather)
+    return _heuristic_explanation(top, bottom, shoes, profile, occasion, weather)
+
+
+def get_harmonic_breakdown(top, bottom, shoes, profile=None, occasion: str = "casual", weather: str | None = None) -> dict:
+    """Calculates dynamic, AI-grade harmonic breakdown metrics for an outfit."""
+    top_col = (getattr(top, "color", "") or "").lower()
+    bot_col = (getattr(bottom, "color", "") or "").lower()
+    top_fit = (getattr(top, "fit", "") or "regular").lower()
+    bot_fit = (getattr(bottom, "fit", "") or "regular").lower()
+
+    # 1. Color Contrast & Tonal Harmony
+    if top_col == bot_col and top_col in ["black", "grey", "blue", "beige"]:
+        color_contrast = "Monochromatic Elegance"
+    elif {top_col, bot_col} == {"white", "black"}:
+        color_contrast = "High-Contrast Classic"
+    elif top_col in ["white", "black", "grey"] and bot_col in ["blue", "navy"]:
+        color_contrast = "Timeless Indigo Anchor"
+    elif top_col in ["beige", "brown", "olive"] or bot_col in ["beige", "brown", "olive"]:
+        color_contrast = "Warm Earthy Harmony"
+    elif top_col in ["white", "black", "beige", "grey"] and bot_col in ["white", "black", "beige", "grey"]:
+        color_contrast = "Clean Neutral Balance"
+    elif "maroon" in (top_col, bot_col):
+        color_contrast = "Rich Tonal Statement"
+    elif "green" in (top_col, bot_col) or "olive" in (top_col, bot_col):
+        color_contrast = "Nature-Inspired Palette"
+    else:
+        color_contrast = "Complementary Dual-Tone"
+
+    # 2. Silhouette Balance
+    if "oversized" in top_fit or "relaxed" in top_fit:
+        if "slim" in bot_fit or "regular" in bot_fit:
+            silhouette = "Relaxed Top / Tapered Bottom"
+        else:
+            silhouette = "Contemporary Relaxed Drape"
+    elif "slim" in top_fit:
+        silhouette = "Streamlined Tailored Silhouette"
+    else:
+        silhouette = "Balanced Classic Proportion"
+
+    # 3. Climate & Weather Comfort
+    w = (weather or "mild").lower()
+    if w in ["warm", "hot"]:
+        weather_rating = "Light & Breathable (Warm Comfort)"
+    elif w in ["cold", "chilly"]:
+        weather_rating = "Structured Thermal Protection"
+    else:
+        weather_rating = "Transitional Mild Layering"
+
+    # 4. Aesthetic Vibe
+    occ = (occasion or "casual").lower()
+    vibes = {
+        "date": "Romantic Sophistication",
+        "interview": "Professional Polish",
+        "party": "Sharp Night-Out Edge",
+        "college": "Effortless Streetwise",
+        "casual": "Relaxed Everyday Chic"
+    }
+    style_vibe = vibes.get(occ, "Versatile Smart Casual")
+
+    return {
+        "color_contrast": color_contrast,
+        "silhouette_balance": silhouette,
+        "weather_rating": weather_rating,
+        "style_vibe": style_vibe,
+    }

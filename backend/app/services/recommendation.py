@@ -208,8 +208,12 @@ def generate_outfits(
     profile,
     occasion,
     style_vibe=None,
-    weather=None
+    weather=None,
+    limit: int = 6,
+    shuffle: bool = False
 ):
+    import random
+
     top_categories = ["tshirt", "t-shirt", "shirt", "top", "polo", "hoodie", "sweater", "jacket", "blazer"]
     bottom_categories = ["jeans", "pants", "trousers", "chinos", "shorts", "bottom", "joggers", "cargo"]
     shoe_categories = ["shoes", "sneakers", "boots", "loafers", "footwear"]
@@ -261,4 +265,14 @@ def generate_outfits(
         reverse=True
     )
 
-    return outfits[:3]
+    if not outfits:
+        return []
+
+    if shuffle and len(outfits) > 1:
+        top_score = outfits[0]["score"]
+        # Take the top tier (score within 20 points of top score) and shuffle
+        top_tier = [o for o in outfits if o["score"] >= max(top_score - 20, 50)]
+        random.shuffle(top_tier)
+        return top_tier[:limit]
+
+    return outfits[:limit]
