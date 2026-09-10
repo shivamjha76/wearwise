@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL, getImageUrl } from "@/lib/api";
 import { getStoredUser, getAuthHeaders, setSession, getStoredToken, clearSession, User } from "@/lib/auth";
@@ -112,6 +112,7 @@ export default function ProfilePage() {
     shoe_size: "UK 8",
   });
 
+  const [initialForm, setInitialForm] = useState<typeof form | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -123,6 +124,28 @@ export default function ProfilePage() {
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+
+  // Compute whether user has modified any form field compared to initial state
+  const isDirty = useMemo(() => {
+    if (!initialForm) return false;
+    return (
+      form.name !== initialForm.name ||
+      form.email !== initialForm.email ||
+      form.phone !== initialForm.phone ||
+      form.gender !== initialForm.gender ||
+      form.height !== initialForm.height ||
+      form.weight !== initialForm.weight ||
+      form.skin_tone !== initialForm.skin_tone ||
+      form.style_preference !== initialForm.style_preference ||
+      form.fit_preference !== initialForm.fit_preference ||
+      form.chest_bust !== initialForm.chest_bust ||
+      form.waist_size !== initialForm.waist_size ||
+      form.hip_size !== initialForm.hip_size ||
+      form.top_size !== initialForm.top_size ||
+      form.bottom_size !== initialForm.bottom_size ||
+      form.shoe_size !== initialForm.shoe_size
+    );
+  }, [form, initialForm]);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -137,43 +160,68 @@ export default function ProfilePage() {
       return;
     }
 
+    // Check cached avatar for zero-flicker instant display
+    const cachedAvatar =
+      user.avatar_url ||
+      (typeof window !== "undefined"
+        ? localStorage.getItem(`wearwise_avatar_cache_${user.id}`)
+        : null);
+
     setCurrentUser(user);
-    setAvatarUrl(user.avatar_url || null);
-    setForm((prev) => ({
-      ...prev,
-      name: user.name,
-      email: user.email,
-      phone: user.phone || prev.phone,
-      gender: user.gender || prev.gender,
-      skin_tone: user.skin_tone || prev.skin_tone,
-    }));
+    setAvatarUrl(cachedAvatar || null);
+
+    let initialData = {
+      name: user.name || "",
+      email: user.email || "",
+      phone: user.phone || "",
+      gender: user.gender || "male",
+      height: "",
+      weight: "",
+      skin_tone: user.skin_tone || "",
+      style_preference: "casual",
+      fit_preference: "regular",
+      chest_bust: "",
+      waist_size: "",
+      hip_size: "",
+      top_size: "M",
+      bottom_size: "32",
+      shoe_size: "UK 8",
+    };
 
     // Restore cached style profile instantly from localStorage
     try {
       const cachedProfile = localStorage.getItem(`wearwise_style_profile_${user.id}`);
       if (cachedProfile) {
         const data = JSON.parse(cachedProfile);
-        setForm((prev) => ({
-          ...prev,
-          gender: data.gender || prev.gender,
-          height: data.height != null ? String(data.height) : prev.height,
-          weight: data.weight != null ? String(data.weight) : prev.weight,
-          skin_tone: data.skin_tone || prev.skin_tone,
-          style_preference: data.style_preference || prev.style_preference,
-          fit_preference: data.fit_preference || prev.fit_preference,
-          chest_bust: data.chest_bust || prev.chest_bust,
-          waist_size: data.waist_size || prev.waist_size,
-          hip_size: data.hip_size || prev.hip_size,
-          top_size: data.top_size || prev.top_size,
-          bottom_size: data.bottom_size || prev.bottom_size,
-          shoe_size: data.shoe_size || prev.shoe_size,
-        }));
+        initialData = {
+          ...initialData,
+          gender: data.gender || initialData.gender,
+          height: data.height != null ? String(data.height) : "",
+          weight: data.weight != null ? String(data.weight) : "",
+          skin_tone: data.skin_tone || initialData.skin_tone,
+          style_preference: data.style_preference || "casual",
+          fit_preference: data.fit_preference || "regular",
+          chest_bust: data.chest_bust || "",
+          waist_size: data.waist_size || "",
+          hip_size: data.hip_size || "",
+          top_size: data.top_size || "M",
+          bottom_size: data.bottom_size || "32",
+          shoe_size: data.shoe_size || "UK 8",
+        };
       }
     } catch {}
+
+    setForm(initialData);
+    setInitialForm(initialData);
 
     const loadProfile = async () => {
       try {
         const token = getStoredToken();
+        let loadedName = user.name || "";
+        let loadedEmail = user.email || "";
+        let loadedPhone = user.phone || "";
+        let loadedGender = user.gender || "male";
+        let loadedSkinTone = user.skin_tone || "";
 
         // 1. Fetch latest user details including avatar
         const userRes = await fetch(`${API_BASE_URL}/users/me`, {
@@ -182,15 +230,17 @@ export default function ProfilePage() {
         if (userRes.ok) {
           const freshUser: User = await userRes.json();
           setCurrentUser(freshUser);
-          setAvatarUrl(freshUser.avatar_url || null);
-          setForm((prev) => ({
-            ...prev,
-            name: freshUser.name || prev.name,
-            email: freshUser.email || prev.email,
-            phone: freshUser.phone || prev.phone,
-            gender: freshUser.gender || prev.gender,
-            skin_tone: freshUser.skin_tone || prev.skin_tone,
-          }));
+          if (freshUser.avatar_url) {
+            setAvatarUrl(freshUser.avatar_url);
+            try {
+              localStorage.setItem(`wearwise_avatar_cache_${freshUser.id}`, freshUser.avatar_url);
+            } catch {}
+          }
+          loadedName = freshUser.name || loadedName;
+          loadedEmail = freshUser.email || loadedEmail;
+          loadedPhone = freshUser.phone || loadedPhone;
+          loadedGender = freshUser.gender || loadedGender;
+          loadedSkinTone = freshUser.skin_tone || loadedSkinTone;
           if (token) {
             setSession(token, freshUser);
           }
@@ -201,30 +251,42 @@ export default function ProfilePage() {
         }
 
         // 2. Fetch style profile & sizing
+        let spData: any = null;
         const res = await fetch(`${API_BASE_URL}/users/${user.id}/style-profile`, {
           headers: getAuthHeaders(),
         });
         if (res.ok) {
-          const data = await res.json();
+          spData = await res.json();
           try {
-            localStorage.setItem(`wearwise_style_profile_${user.id}`, JSON.stringify(data));
+            localStorage.setItem(`wearwise_style_profile_${user.id}`, JSON.stringify(spData));
           } catch {}
-          setForm((prev) => ({
-            ...prev,
-            gender: data.gender || prev.gender,
-            height: data.height != null ? String(data.height) : "",
-            weight: data.weight != null ? String(data.weight) : "",
-            skin_tone: data.skin_tone || prev.skin_tone,
-            style_preference: data.style_preference || prev.style_preference,
-            fit_preference: data.fit_preference || prev.fit_preference,
-            chest_bust: data.chest_bust || "",
-            waist_size: data.waist_size || "",
-            hip_size: data.hip_size || "",
-            top_size: data.top_size || prev.top_size,
-            bottom_size: data.bottom_size || prev.bottom_size,
-            shoe_size: data.shoe_size || prev.shoe_size,
-          }));
+        } else {
+          try {
+            const cachedProfile = localStorage.getItem(`wearwise_style_profile_${user.id}`);
+            if (cachedProfile) spData = JSON.parse(cachedProfile);
+          } catch {}
         }
+
+        const consolidatedForm = {
+          name: loadedName,
+          email: loadedEmail,
+          phone: loadedPhone,
+          gender: spData?.gender || loadedGender || "male",
+          height: spData?.height != null ? String(spData.height) : "",
+          weight: spData?.weight != null ? String(spData.weight) : "",
+          skin_tone: spData?.skin_tone || loadedSkinTone || "",
+          style_preference: spData?.style_preference || "casual",
+          fit_preference: spData?.fit_preference || "regular",
+          chest_bust: spData?.chest_bust || "",
+          waist_size: spData?.waist_size || "",
+          hip_size: spData?.hip_size || "",
+          top_size: spData?.top_size || "M",
+          bottom_size: spData?.bottom_size || "32",
+          shoe_size: spData?.shoe_size || "UK 8",
+        };
+
+        setForm(consolidatedForm);
+        setInitialForm(consolidatedForm);
       } catch (err) {
         console.error("Could not fetch existing style profile", err);
       } finally {
@@ -277,6 +339,11 @@ export default function ProfilePage() {
       if (token) {
         setSession(token, updatedUser);
       }
+      try {
+        if (updatedUser.avatar_url) {
+          localStorage.setItem(`wearwise_avatar_cache_${updatedUser.id}`, updatedUser.avatar_url);
+        }
+      } catch {}
 
       if (updatedUser.skin_tone) {
         setForm((prev) => ({ ...prev, skin_tone: updatedUser.skin_tone || "" }));
@@ -321,6 +388,9 @@ export default function ProfilePage() {
       if (token) {
         setSession(token, updatedUser);
       }
+      try {
+        localStorage.removeItem(`wearwise_avatar_cache_${updatedUser.id}`);
+      } catch {}
       setToastMessage("Profile picture removed. Skin tone reset.");
     } catch (err: unknown) {
       console.error(err);
@@ -398,6 +468,8 @@ export default function ProfilePage() {
         localStorage.setItem(`wearwise_style_profile_${user.id}`, JSON.stringify(freshProfile));
       } catch {}
 
+      // Reset dirty state to disable Save button until user makes new edits
+      setInitialForm(form);
       setToastMessage("Profile & measurements saved successfully! ✨");
     } catch (error: unknown) {
       console.error(error);
@@ -506,6 +578,9 @@ export default function ProfilePage() {
                       src={getImageUrl(avatarUrl) || avatarUrl}
                       alt={form.name || "Profile Photo"}
                       className="h-full w-full object-cover"
+                      onError={() => {
+                        setAvatarUrl(null);
+                      }}
                     />
                   ) : (
                     <span>{form.name ? form.name.charAt(0) : "👤"}</span>
@@ -883,8 +958,12 @@ export default function ProfilePage() {
           <div className="border-t border-[#eceef0] pt-6 flex flex-col sm:flex-row items-center gap-3">
             <button
               type="submit"
-              disabled={loading}
-              className="flex h-12 w-full sm:flex-1 items-center justify-center gap-2 rounded-xl bg-[#171717] px-6 text-xs sm:text-sm font-bold text-white shadow-sm transition hover:bg-black active:scale-98 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+              disabled={loading || !isDirty || fetchingProfile}
+              className={`flex h-12 w-full sm:flex-1 items-center justify-center gap-2 rounded-xl px-6 text-xs sm:text-sm font-bold shadow-sm transition active:scale-98 cursor-pointer ${
+                !isDirty || loading || fetchingProfile
+                  ? "bg-neutral-200 text-neutral-400 border border-neutral-300 cursor-not-allowed opacity-70"
+                  : "bg-[#171717] text-white hover:bg-black"
+              }`}
             >
               {loading ? (
                 <>

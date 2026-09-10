@@ -189,6 +189,9 @@ export default function Navbar() {
                           src={getImageUrl(user.avatar_url) || user.avatar_url}
                           alt={user.name}
                           className="h-full w-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                          }}
                         />
                       ) : (
                         <span>{user.name ? user.name.charAt(0) : "👤"}</span>
@@ -239,6 +242,9 @@ export default function Navbar() {
                     src={getImageUrl(user.avatar_url) || user.avatar_url}
                     alt={user.name}
                     className="h-full w-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
                   />
                 ) : (
                   <span>{user.name ? user.name.charAt(0) : "👤"}</span>
@@ -293,6 +299,9 @@ export default function Navbar() {
                         src={getImageUrl(user.avatar_url) || user.avatar_url}
                         alt={user.name}
                         className="h-full w-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
                       />
                     ) : (
                       <span>{user.name ? user.name.charAt(0) : "👤"}</span>

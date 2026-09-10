@@ -1,11 +1,12 @@
 import os
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 
-from app.database import Base, engine
-from app.models import User, StyleProfile, WardrobeItem
+from app.database import Base, engine, get_db
+from app.models import User, StyleProfile, WardrobeItem, UploadedFile
 from app.models.outfit import SavedOutfit
 from app.core.storage import get_upload_dir
 
@@ -131,8 +132,8 @@ async def handle_api_prefix(request, call_next):
 
 
 @app.get("/uploads/{filename}")
-def serve_upload_file(filename: str):
-    """Serves uploaded media from writable temp storage or bundled repository storage."""
+def serve_upload_file(filename: str, db: Session = Depends(get_db)):
+    """Serves uploaded media from disk, bundled repository storage, or database persistence."""
     # 1. Primary writable storage
     primary = UPLOAD_DIR / filename
     if primary.exists():
@@ -146,6 +147,27 @@ def serve_upload_file(filename: str):
     for candidate in repo_uploads:
         if candidate.exists():
             return FileResponse(candidate)
+
+    # 3. Database persistence fallback (recovers files across stateless serverless instances)
+    try:
+        record = db.query(UploadedFile).filter(UploadedFile.filename == filename).first()
+        if record and record.file_data:
+            # Cache locally to disk on this instance for fast subsequent requests
+            try:
+                primary.parent.mkdir(parents=True, exist_ok=True)
+                with open(primary, "wb") as f:
+                    f.write(record.file_data)
+            except Exception:
+                pass
+            return Response(
+                content=record.file_data,
+                media_type=record.content_type or "image/jpeg",
+                headers={
+                    "Cache-Control": "public, max-age=31536000, immutable"
+                }
+            )
+    except Exception as e:
+        print(f"Database upload fallback error for {filename}: {e}")
 
     raise HTTPException(status_code=404, detail="Uploaded file not found")
 app.include_router(auth_router)

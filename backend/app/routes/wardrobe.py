@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.models.wardrobe import WardrobeItem
+from app.models.uploaded_file import UploadedFile
 from app.schemas.wardrobe import (
     WardrobeItemCreate,
     WardrobeItemResponse
@@ -33,6 +34,7 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 async def upload_wardrobe_image(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     if not file.filename:
         raise HTTPException(
@@ -68,6 +70,21 @@ async def upload_wardrobe_image(
             file_bytes.extend(chunk)
 
     mime_type = file.content_type or f"image/{ext.lstrip('.')}"
+
+    # Persist in database for cross-container serverless permanence
+    try:
+        db_file = db.query(UploadedFile).filter(UploadedFile.filename == unique_filename).first()
+        if not db_file:
+            db_file = UploadedFile(
+                filename=unique_filename,
+                content_type=mime_type,
+                file_data=bytes(file_bytes)
+            )
+            db.add(db_file)
+            db.commit()
+    except Exception as db_err:
+        print(f"Warning: failed to persist wardrobe image in db: {db_err}")
+
     tags = analyze_garment_image(
         image_bytes=bytes(file_bytes),
         filename=file.filename,

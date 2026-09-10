@@ -1,6 +1,8 @@
 import uuid
+from io import BytesIO
 from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from PIL import Image, ImageOps
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -8,6 +10,7 @@ from app.models.user import User
 from app.models.style_profile import StyleProfile
 from app.models.wardrobe import WardrobeItem
 from app.models.outfit import SavedOutfit
+from app.models.uploaded_file import UploadedFile
 from app.schemas.user import UserResponse, UserUpdate
 from app.core.dependencies import get_current_user
 from app.core.storage import get_upload_dir
@@ -119,37 +122,66 @@ async def upload_profile_picture(
             detail=f"Invalid file type '{ext}'. Allowed types: {', '.join(sorted(ALLOWED_AVATAR_EXTENSIONS))}"
         )
 
-    unique_filename = f"avatar_{current_user.id}_{uuid.uuid4().hex[:10]}{ext}"
     upload_dir = get_upload_dir()
-    file_path = upload_dir / unique_filename
 
     file_bytes = bytearray()
     file_size = 0
+    while chunk := await file.read(1024 * 1024):
+        file_size += len(chunk)
+        if file_size > MAX_AVATAR_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Profile image size exceeds maximum limit of 5MB"
+            )
+        file_bytes.extend(chunk)
+
+    # Image optimization & resize (max 512x512 WebP) for ultra-fast loading and persistence
+    unique_filename = f"avatar_{current_user.id}_{uuid.uuid4().hex[:10]}.webp"
+    mime_type = "image/webp"
+    final_bytes = bytes(file_bytes)
+
+    try:
+        img = Image.open(BytesIO(file_bytes))
+        img = ImageOps.exif_transpose(img)
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGBA")
+        else:
+            img = img.convert("RGB")
+        img.thumbnail((512, 512), Image.Resampling.LANCZOS)
+        out_buf = BytesIO()
+        img.save(out_buf, format="WEBP", quality=85, method=6)
+        final_bytes = out_buf.getvalue()
+    except Exception as img_err:
+        print(f"Image optimization note: {img_err}")
+        unique_filename = f"avatar_{current_user.id}_{uuid.uuid4().hex[:10]}{ext}"
+        mime_type = file.content_type or f"image/{ext.lstrip('.')}"
+
+    # Save to local disk cache
+    file_path = upload_dir / unique_filename
     try:
         with open(file_path, "wb") as buffer:
-            while chunk := await file.read(1024 * 1024):
-                file_size += len(chunk)
-                if file_size > MAX_AVATAR_SIZE:
-                    buffer.close()
-                    if file_path.exists():
-                        file_path.unlink()
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Profile image size exceeds maximum limit of 5MB"
-                    )
-                buffer.write(chunk)
-                file_bytes.extend(chunk)
-    except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save profile picture: {str(e)}"
-        )
+            buffer.write(final_bytes)
+    except Exception as save_err:
+        print(f"Warning: disk cache write failed: {save_err}")
+
+    # Persist in PostgreSQL database for permanent cross-container storage
+    try:
+        db_file = db.query(UploadedFile).filter(UploadedFile.filename == unique_filename).first()
+        if not db_file:
+            db_file = UploadedFile(
+                filename=unique_filename,
+                content_type=mime_type,
+                file_data=final_bytes
+            )
+            db.add(db_file)
+        else:
+            db_file.content_type = mime_type
+            db_file.file_data = final_bytes
+    except Exception as db_err:
+        print(f"Warning: failed to persist avatar in db: {db_err}")
 
     # AI Skin Tone Detection
-    mime_type = file.content_type or f"image/{ext.lstrip('.')}"
-    detection = detect_skin_tone_from_image(bytes(file_bytes), unique_filename, mime_type)
+    detection = detect_skin_tone_from_image(final_bytes, unique_filename, mime_type)
     detected_tone = detection.get("skin_tone") if detection.get("has_face") else None
 
     # Update or create user's StyleProfile
@@ -168,7 +200,7 @@ async def upload_profile_picture(
         )
         db.add(profile)
 
-    # Delete old avatar file if it exists and was an upload
+    # Delete old avatar file from disk and database if it exists and was an upload
     if current_user.avatar_url and current_user.avatar_url.startswith("/uploads/"):
         old_filename = current_user.avatar_url.replace("/uploads/", "").strip()
         if old_filename and old_filename != unique_filename:
@@ -178,6 +210,10 @@ async def upload_profile_picture(
                     old_file.unlink()
                 except Exception:
                     pass
+            try:
+                db.query(UploadedFile).filter(UploadedFile.filename == old_filename).delete()
+            except Exception:
+                pass
 
     current_user.avatar_url = f"/uploads/{unique_filename}"
     db.commit()
@@ -209,6 +245,10 @@ def remove_profile_picture(
                     old_file.unlink()
                 except Exception:
                     pass
+            try:
+                db.query(UploadedFile).filter(UploadedFile.filename == old_filename).delete()
+            except Exception:
+                pass
 
     current_user.avatar_url = None
     db.commit()
