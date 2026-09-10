@@ -110,7 +110,7 @@ export default function Navbar() {
     },
     {
       name: "Shop",
-      href: "/wardrobe/next-purchase",
+      href: "/shop",
       icon: ShoppingBag,
       desc: "Smart wardrobe recommendations",
     },

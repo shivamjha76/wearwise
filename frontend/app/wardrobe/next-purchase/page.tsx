@@ -1,20 +1,45 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  Search,
+  ChevronDown,
+  ChevronUp,
+  Heart,
+  Filter,
+  X,
+  ExternalLink,
+  Sparkles,
+  ShoppingBag,
+  Star,
+  Check,
+  RotateCcw
+} from "lucide-react";
 import { API_BASE_URL } from "@/lib/api";
 import { getStoredUser, getAuthHeaders } from "@/lib/auth";
 
 type Product = {
-  id: number;
+  id: string | number;
   name: string;
   category: string;
+  group?: string;
   color: string;
-  fit: string;
+  fit?: string;
   price: number;
-  brand: string;
+  original_price?: number;
+  discount_percent?: number;
+  rating?: number;
+  reviews_count?: number;
+  brand?: string;
   image: string;
+  store?: string;
+  store_url?: string;
+  badge?: string;
+  reason?: string;
+  is_wardrobe_match?: boolean;
+  multiplier?: number | null;
 };
 
 type Recommendation = {
@@ -26,26 +51,95 @@ type Recommendation = {
   products: Product[];
 };
 
-const COLOR_MAP: Record<string, string> = {
-  white: "#ffffff",
-  black: "#171717",
-  grey: "#71717a",
-  beige: "#d4c5a9",
-  blue: "#2563eb",
-  green: "#16a34a",
-  olive: "#556b2f",
-  brown: "#78350f",
-  maroon: "#881337",
-};
+const CATEGORY_OPTIONS = [
+  "Topwear",
+  "Bottomwear",
+  "Footwear",
+  "Outerwear",
+  "Accessories",
+];
 
-export default function NextPurchasePage() {
+const COLOR_SWATCHES = [
+  { name: "black", hex: "#111111", border: "border-transparent" },
+  { name: "white", hex: "#ffffff", border: "border-gray-300" },
+  { name: "grey", hex: "#94a3b8", border: "border-transparent" },
+  { name: "blue", hex: "#1e3a8a", border: "border-transparent" },
+  { name: "olive", hex: "#556b2f", border: "border-transparent" },
+  { name: "maroon", hex: "#7f1d1d", border: "border-transparent" },
+  { name: "beige", hex: "#d4b996", border: "border-transparent" },
+];
+
+const POPULAR_BRANDS = [
+  "H&M",
+  "Uniqlo",
+  "Levi's",
+  "Nike",
+  "Zara",
+  "Fossil",
+  "Roadster",
+  "Puma",
+  "Marks & Spencer",
+  "Dennis Lingo",
+];
+
+export default function ShopPage() {
   const router = useRouter();
+  const [products, setProducts] = useState<Product[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+
+  // Filter States
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [maxPrice, setMaxPrice] = useState<number>(10000);
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<string>("recommended");
+
+  // Accordion Toggles
+  const [categoryOpen, setCategoryOpen] = useState(true);
+  const [colorOpen, setColorOpen] = useState(true);
+  const [brandOpen, setBrandOpen] = useState(false);
+
+  // Mobile Filter Drawer
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  // Wishlist & Modal State
+  const [wishlist, setWishlist] = useState<Set<string>>(new Set());
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-  const fetchRecommendations = async () => {
+  // Load wishlist from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("wearwise_shop_wishlist");
+      if (saved) {
+        setWishlist(new Set(JSON.parse(saved)));
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const toggleWishlist = (id: string | number) => {
+    const key = String(id);
+    setWishlist((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      try {
+        localStorage.setItem("wearwise_shop_wishlist", JSON.stringify(Array.from(next)));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  const fetchShopData = async () => {
     const user = getStoredUser();
     if (!user) {
       router.push("/login");
@@ -54,15 +148,17 @@ export default function NextPurchasePage() {
 
     setLoading(true);
     setError(false);
+
     try {
       const response = await fetch(`${API_BASE_URL}/wardrobe/${user.id}/next-purchase`, {
         headers: getAuthHeaders(),
       });
-      if (!response.ok) throw new Error("Failed to fetch recommendations");
+      if (!response.ok) throw new Error("Failed to fetch shop recommendations");
       const data = await response.json();
       setRecommendations(data.recommendations || []);
-    } catch (fetchError) {
-      console.error(fetchError);
+      setProducts(data.all_products || []);
+    } catch (err) {
+      console.error(err);
       setError(true);
     } finally {
       setLoading(false);
@@ -70,8 +166,7 @@ export default function NextPurchasePage() {
   };
 
   useEffect(() => {
-    const timer = window.setTimeout(fetchRecommendations, 0);
-    return () => window.clearTimeout(timer);
+    fetchShopData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
@@ -86,16 +181,91 @@ export default function NextPurchasePage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedProduct]);
 
+  // Clear all filters
+  const handleClearAll = () => {
+    setSearchQuery("");
+    setSelectedCategories([]);
+    setMaxPrice(10000);
+    setSelectedColor(null);
+    setSelectedBrand(null);
+    setSortBy("recommended");
+  };
+
+  // Toggle Category Checkbox
+  const toggleCategory = (cat: string) => {
+    setSelectedCategories((prev) =>
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
+    );
+  };
+
+  // Filter and Sort Logic
+  const filteredProducts = useMemo(() => {
+    let list = [...products];
+
+    // Search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter((p) => {
+        const text = `${p.name} ${p.brand || ""} ${p.category} ${p.color} ${p.group || ""}`.toLowerCase();
+        return text.includes(q);
+      });
+    }
+
+    // Category filter (Topwear, Bottomwear, Footwear, Outerwear, Accessories)
+    if (selectedCategories.length > 0) {
+      list = list.filter((p) => p.group && selectedCategories.includes(p.group));
+    }
+
+    // Price range slider
+    list = list.filter((p) => p.price <= maxPrice);
+
+    // Color swatch filter
+    if (selectedColor) {
+      const target = selectedColor.toLowerCase();
+      list = list.filter((p) => {
+        const c = (p.color || "").toLowerCase();
+        if (target === "blue") return c.includes("blue") || c.includes("navy") || c.includes("indigo");
+        if (target === "beige") return c.includes("beige") || c.includes("khaki") || c.includes("tan");
+        if (target === "olive") return c.includes("olive") || c.includes("green");
+        if (target === "grey") return c.includes("grey") || c.includes("charcoal");
+        return c.includes(target);
+      });
+    }
+
+    // Brand filter
+    if (selectedBrand) {
+      list = list.filter((p) => (p.brand || "").toLowerCase() === selectedBrand.toLowerCase());
+    }
+
+    // Sorting
+    if (sortBy === "price_asc") {
+      list.sort((a, b) => a.price - b.price);
+    } else if (sortBy === "price_desc") {
+      list.sort((a, b) => b.price - a.price);
+    } else if (sortBy === "rating") {
+      list.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    } else if (sortBy === "recommended") {
+      // Wardrobe gap matches first, then highest rating
+      list.sort((a, b) => {
+        if (a.is_wardrobe_match && !b.is_wardrobe_match) return -1;
+        if (!a.is_wardrobe_match && b.is_wardrobe_match) return 1;
+        return (b.rating || 4.5) - (a.rating || 4.5);
+      });
+    }
+
+    return list;
+  }, [products, searchQuery, selectedCategories, maxPrice, selectedColor, selectedBrand, sortBy]);
+
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f7f7f5] px-6">
+      <main className="flex min-h-screen items-center justify-center bg-[#fbfbf9] px-6">
         <div className="text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#171717] text-white shadow-2xs">
-            📈
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#111111] text-white shadow-sm">
+            <ShoppingBag className="h-6 w-6 animate-pulse" />
           </div>
-          <div className="mx-auto mt-5 h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-black" />
-          <p className="mt-4 text-xs font-bold uppercase tracking-widest text-gray-500">
-            Analyzing closet gap matrix...
+          <div className="mx-auto mt-4 h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-black" />
+          <p className="mt-4 text-xs font-bold uppercase tracking-widest text-gray-700">
+            Curating Wardrobe Picks...
           </p>
         </div>
       </main>
@@ -103,212 +273,492 @@ export default function NextPurchasePage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#f7f7f5] px-5 py-8 sm:px-8 sm:py-12 text-[#111111]">
-      {/* Ambient background glow */}
-      <div className="pointer-events-none absolute -top-40 left-1/2 -z-10 h-[500px] w-[900px] -translate-x-1/2 rounded-full bg-gradient-to-b from-[#e8ebe4]/50 via-[#fcfbf7]/40 to-transparent blur-3xl" />
+    <main className="min-h-screen bg-[#faf9f6] text-[#111111] pb-20">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6">
 
-      <div className="mx-auto max-w-6xl">
-        
-        {/* ================= HEADER ================= */}
-        <div className="mb-8 border-b border-[#e2e4e7] pb-8">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#dedad0] bg-white/90 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#45546a] shadow-2xs backdrop-blur-md">
-                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>AI Wardrobe Multiplier</span>
-              </div>
-              <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">
-                Complete Your Wardrobe
+        {/* ================= HERO BANNER ================= */}
+        <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-[#ded9cf] bg-[#ede8e1] shadow-xs mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-12 items-center min-h-[140px] sm:min-h-[160px]">
+            {/* Left Content */}
+            <div className="p-6 sm:p-8 md:p-10 md:col-span-6 lg:col-span-5 z-10">
+              <span className="text-[10px] sm:text-[11px] font-bold tracking-[0.2em] text-neutral-500 uppercase">
+                SHOP SMARTER
+              </span>
+              <h1 className="mt-1.5 text-2xl sm:text-3xl lg:text-4xl font-black text-neutral-950 tracking-tight leading-tight">
+                Find what fits your style
               </h1>
-              <p className="mt-1 max-w-xl text-xs sm:text-sm text-gray-600">
-                Discover the single surgical addition that unlocks exponential new outfit combinations from what you already own.
+              <p className="mt-1 text-xs sm:text-sm text-neutral-600 font-medium">
+                Curated picks to complete your wardrobe.
               </p>
             </div>
 
-            <div className="flex items-center gap-2.5">
-              <Link
-                href="/wardrobe"
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-[#d4d6da] bg-white px-4 text-xs font-semibold text-gray-800 shadow-2xs transition hover:bg-gray-50 active:scale-95"
-              >
-                <span>👕 Wardrobe Vault</span>
-              </Link>
-              <Link
-                href="/style"
-                className="inline-flex h-11 items-center justify-center rounded-xl bg-[#171717] px-5 text-xs font-semibold text-white shadow-sm transition hover:bg-black active:scale-95"
-              >
-                <span>✨ Style Me →</span>
-              </Link>
+            {/* Right Flatlay Visual */}
+            <div className="md:col-span-6 lg:col-span-7 h-36 md:h-full relative overflow-hidden flex items-center justify-end">
+              <img
+                src="/shop/banner_flatlay.png"
+                alt="Curated wardrobe flatlay with sneakers and shirts"
+                className="h-full w-full object-cover md:object-contain object-right"
+              />
             </div>
           </div>
         </div>
 
-        {/* ================= ERROR STATE ================= */}
-        {error ? (
-          <section className="rounded-3xl border border-red-200 bg-white px-6 py-14 text-center shadow-xs">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-xl text-red-600">
-              ⚠️
-            </div>
-            <h2 className="mt-4 text-xl font-bold text-gray-950">
-              Could not load wardrobe gap analysis
-            </h2>
-            <p className="mx-auto mt-1 max-w-md text-xs text-gray-600">
-              Please verify your backend connection and try again.
-            </p>
-            <button
-              type="button"
-              onClick={fetchRecommendations}
-              className="mt-6 rounded-xl bg-[#171717] px-6 py-2.5 text-xs font-bold text-white transition hover:bg-black active:scale-95 cursor-pointer"
-            >
-              Try Again
-            </button>
-          </section>
-        ) : recommendations.length === 0 ? (
-          /* ================= WELL-BALANCED CLOSET ================= */
-          <section className="rounded-3xl border border-dashed border-[#dedad0] bg-white px-6 py-14 text-center shadow-2xs">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#f7f7f5] text-3xl shadow-inner">
-              ✦
-            </div>
-            <h2 className="mt-4 text-xl font-extrabold text-gray-950">
-              Your wardrobe is already well balanced!
-            </h2>
-            <p className="mx-auto mt-1 max-w-md text-xs sm:text-sm text-gray-600">
-              You currently have strong versatility across tops, bottoms, and footwear. Add more pieces in your Wardrobe Vault to uncover fresh synergy opportunities.
-            </p>
-            <button
-              type="button"
-              onClick={() => router.push("/wardrobe")}
-              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#171717] px-6 py-3 text-xs font-bold text-white shadow-sm transition hover:bg-black active:scale-95 cursor-pointer"
-            >
-              <span>Go to My Wardrobe</span>
-              <span>→</span>
-            </button>
-          </section>
-        ) : (
-          /* ================= RECOMMENDATIONS STREAM ================= */
-          <div className="space-y-8 animate-pop-in">
-            {recommendations.map((recommendation, index) => {
-              const hex = COLOR_MAP[recommendation.color.toLowerCase()] || "#9ca3af";
+        {/* ================= MAIN LAYOUT: SIDEBAR + GRID ================= */}
+        <div className="flex flex-col lg:flex-row gap-8">
 
-              return (
-                <section
-                  key={`${recommendation.color}-${recommendation.category}-${index}`}
-                  className="rounded-3xl border border-[#e2e4e7] bg-white p-6 shadow-[0_10px_30px_rgba(27,35,43,0.04)] sm:p-8"
-                >
-                  {/* Gap Summary Banner */}
-                  <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between border-b border-[#eceef0] pb-6">
-                    <div className="max-w-2xl">
-                      <div className="flex items-center gap-2">
-                        <span className="rounded-full bg-amber-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-900 border border-amber-200">
-                          Priority Gap #{index + 1}
-                        </span>
-                        <span className="rounded-full bg-black/5 px-2.5 py-1 text-[10px] font-semibold text-gray-700">
-                          High Versatility Index
-                        </span>
-                      </div>
-
-                      <div className="mt-3 flex items-center gap-3">
-                        <span
-                          className="h-4 w-4 rounded-full border border-black/10 shadow-2xs shrink-0"
-                          style={{ backgroundColor: hex }}
-                        />
-                        <h2 className="text-2xl font-extrabold capitalize text-gray-950 sm:text-3xl">
-                          {recommendation.color} {recommendation.category}
-                        </h2>
-                      </div>
-
-                      <p className="mt-2 text-xs sm:text-sm leading-relaxed text-gray-600">
-                        {recommendation.reason}
-                      </p>
-                    </div>
-
-                    {/* Multiplier Scoreboard */}
-                    <div className="min-w-[200px] shrink-0 rounded-2xl border border-black/10 bg-[#171717] p-4 text-white shadow-sm text-center md:text-right">
-                      <p className="text-3xl font-black text-white sm:text-4xl">
-                        +{recommendation.new_outfit_combinations}
-                      </p>
-                      <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-gray-300">
-                        New Outfits Unlocked
-                      </p>
-                      <span className="mt-2 inline-block rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-medium text-emerald-300">
-                        Multiplier ROI: High
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Product Cards Grid */}
-                  <div className="mt-6">
-                    <p className="mb-4 text-xs font-bold uppercase tracking-wider text-gray-400">
-                      Curated Matching Garments
-                    </p>
-
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {recommendation.products.map((product) => (
-                        <article
-                          key={product.id}
-                          className="group flex flex-col rounded-2xl border border-[#e2e4e7] bg-[#fbfbf9] p-3.5 transition-all duration-200 hover:-translate-y-1 hover:border-black/30 hover:bg-white hover:shadow-md"
-                        >
-                          {/* Image Container */}
-                          <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-[#f7f7f5] border border-[#eceef0] p-3 flex items-center justify-center">
-                            <img
-                              src={product.image}
-                              alt={product.name}
-                              className="h-full w-full object-contain object-center transition duration-200 group-hover:scale-105"
-                            />
-                            <div className="absolute top-2 left-2">
-                              <span className="rounded-full bg-black/80 backdrop-blur-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
-                                {product.brand}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Details */}
-                          <div className="mt-3 flex flex-1 flex-col justify-between px-1">
-                            <div>
-                              <h3 className="text-sm font-bold text-gray-950 line-clamp-1">
-                                {product.name}
-                              </h3>
-                              <p className="mt-1 text-[11px] capitalize text-gray-500">
-                                {product.fit} fit · {product.color}
-                              </p>
-                            </div>
-
-                            <div className="mt-4 flex items-center justify-between border-t border-[#eceef0] pt-3">
-                              <p className="text-base font-extrabold text-gray-950">
-                                ₹{product.price.toLocaleString("en-IN")}
-                              </p>
-                              <button
-                                type="button"
-                                onClick={() => setSelectedProduct(product)}
-                                className="rounded-xl bg-[#171717] px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-black active:scale-95 cursor-pointer shadow-2xs"
-                              >
-                                View Piece
-                              </button>
-                            </div>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  </div>
-                </section>
-              );
-            })}
-
-            {/* Back to Wardrobe Footer Button */}
-            <div className="pt-4">
+          {/* ================= DESKTOP SIDEBAR FILTERS ================= */}
+          <aside className="hidden lg:block w-64 shrink-0 space-y-6 select-none">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+              <h2 className="text-base font-extrabold text-neutral-950">Filters</h2>
               <button
                 type="button"
-                onClick={() => router.push("/wardrobe")}
-                className="w-full rounded-2xl border border-[#e2e4e7] bg-white px-6 py-4 text-xs font-bold text-gray-900 transition hover:bg-gray-50 shadow-2xs cursor-pointer"
+                onClick={handleClearAll}
+                className="text-xs font-semibold text-neutral-500 hover:text-black cursor-pointer transition"
               >
-                ← Back to Wardrobe Vault
+                Clear all
+              </button>
+            </div>
+
+            {/* 1. Category Filter */}
+            <div className="border-b border-gray-200 pb-5">
+              <button
+                type="button"
+                onClick={() => setCategoryOpen(!categoryOpen)}
+                className="flex w-full items-center justify-between text-sm font-bold text-neutral-900 cursor-pointer"
+              >
+                <span>Category</span>
+                {categoryOpen ? <ChevronUp className="h-4 w-4 text-gray-500" /> : <ChevronDown className="h-4 w-4 text-gray-500" />}
+              </button>
+
+              {categoryOpen && (
+                <div className="mt-3.5 space-y-2.5">
+                  {CATEGORY_OPTIONS.map((cat) => {
+                    const checked = selectedCategories.includes(cat);
+                    return (
+                      <label
+                        key={cat}
+                        className="flex items-center gap-2.5 text-xs font-medium text-neutral-700 cursor-pointer hover:text-black"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleCategory(cat)}
+                          className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black cursor-pointer accent-black"
+                        />
+                        <span>{cat}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* NOTE: GENDER FILTER IS INTENTIONALLY EXCLUDED AS REQUESTED BY USER */}
+
+            {/* 2. Price Range Filter */}
+            <div className="border-b border-gray-200 pb-5">
+              <div className="flex items-center justify-between text-sm font-bold text-neutral-900">
+                <span>Price Range</span>
+              </div>
+              <div className="mt-4">
+                <input
+                  type="range"
+                  min={500}
+                  max={10000}
+                  step={200}
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(Number(e.target.value))}
+                  className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black"
+                />
+                <div className="mt-2.5 flex items-center justify-between text-xs font-semibold text-neutral-600">
+                  <span>₹0</span>
+                  <span className="font-bold text-black">₹{maxPrice.toLocaleString("en-IN")}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Color Filter */}
+            <div className="border-b border-gray-200 pb-5">
+              <button
+                type="button"
+                onClick={() => setColorOpen(!colorOpen)}
+                className="flex w-full items-center justify-between text-sm font-bold text-neutral-900 cursor-pointer"
+              >
+                <span>Color</span>
+                {colorOpen ? <ChevronUp className="h-4 w-4 text-gray-500" /> : <ChevronDown className="h-4 w-4 text-gray-500" />}
+              </button>
+
+              {colorOpen && (
+                <div className="mt-3.5 flex flex-wrap items-center gap-2">
+                  {COLOR_SWATCHES.map((swatch) => {
+                    const isSelected = selectedColor === swatch.name;
+                    return (
+                      <button
+                        key={swatch.name}
+                        type="button"
+                        onClick={() => setSelectedColor(isSelected ? null : swatch.name)}
+                        title={swatch.name.toUpperCase()}
+                        className={`h-6 w-6 rounded-full transition cursor-pointer relative shadow-2xs ${swatch.border} ${
+                          isSelected ? "ring-2 ring-offset-2 ring-black scale-110" : "hover:scale-105"
+                        }`}
+                        style={{ backgroundColor: swatch.hex }}
+                      >
+                        {isSelected && (
+                          <Check
+                            className={`h-3 w-3 absolute inset-0 m-auto ${
+                              swatch.name === "white" || swatch.name === "beige" ? "text-black" : "text-white"
+                            }`}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 4. Brand Filter */}
+            <div className="pb-4">
+              <button
+                type="button"
+                onClick={() => setBrandOpen(!brandOpen)}
+                className="flex w-full items-center justify-between text-sm font-bold text-neutral-900 cursor-pointer"
+              >
+                <span>Brand</span>
+                {brandOpen ? <ChevronUp className="h-4 w-4 text-gray-500" /> : <ChevronDown className="h-4 w-4 text-gray-500" />}
+              </button>
+
+              {brandOpen && (
+                <div className="mt-3.5 space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {POPULAR_BRANDS.map((brand) => {
+                    const isSelected = selectedBrand === brand;
+                    return (
+                      <button
+                        key={brand}
+                        type="button"
+                        onClick={() => setSelectedBrand(isSelected ? null : brand)}
+                        className={`block w-full text-left text-xs px-2.5 py-1.5 rounded-lg font-medium transition cursor-pointer ${
+                          isSelected ? "bg-black text-white font-bold" : "text-gray-700 hover:bg-gray-100"
+                        }`}
+                      >
+                        {brand}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </aside>
+
+          {/* ================= RIGHT MAIN CONTENT ================= */}
+          <div className="flex-1 min-w-0">
+
+            {/* Top Toolbar: Search + Sort + Mobile Filter Button */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+              
+              {/* Search Bar */}
+              <div className="relative flex-1 max-w-lg">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search for shirts, jeans, sneakers..."
+                  className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-2.5 text-xs text-neutral-900 placeholder:text-neutral-400 focus:border-black focus:outline-hidden shadow-2xs transition"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-black cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Mobile Filter Button & Desktop Sort Dropdown */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMobileFiltersOpen(true)}
+                  className="lg:hidden inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-neutral-800 shadow-2xs cursor-pointer hover:bg-gray-50"
+                >
+                  <Filter className="h-3.5 w-3.5 text-neutral-500" />
+                  <span>Filters</span>
+                </button>
+
+                {/* Sort Dropdown */}
+                <div className="relative flex items-center">
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-neutral-800 shadow-2xs focus:border-black focus:outline-hidden cursor-pointer appearance-none pr-8"
+                  >
+                    <option value="recommended">Sort by: Recommended</option>
+                    <option value="price_asc">Price: Low to High</option>
+                    <option value="price_desc">Price: High to Low</option>
+                    <option value="rating">Highest Rated</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2.5 h-3.5 w-3.5 text-neutral-500" />
+                </div>
+              </div>
+            </div>
+
+            {/* Active Filters Pill Row */}
+            {(selectedCategories.length > 0 || selectedColor || selectedBrand || maxPrice < 10000 || searchQuery) && (
+              <div className="flex flex-wrap items-center gap-2 mb-5">
+                <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Active:</span>
+                {selectedCategories.map((c) => (
+                  <span
+                    key={c}
+                    className="inline-flex items-center gap-1 rounded-full bg-neutral-200/80 px-2.5 py-1 text-[11px] font-semibold text-neutral-800"
+                  >
+                    <span>{c}</span>
+                    <button type="button" onClick={() => toggleCategory(c)} className="hover:text-black cursor-pointer">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+                {selectedColor && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-neutral-200/80 px-2.5 py-1 text-[11px] font-semibold text-neutral-800 capitalize">
+                    <span>Color: {selectedColor}</span>
+                    <button type="button" onClick={() => setSelectedColor(null)} className="hover:text-black cursor-pointer">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+                {selectedBrand && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-neutral-200/80 px-2.5 py-1 text-[11px] font-semibold text-neutral-800">
+                    <span>{selectedBrand}</span>
+                    <button type="button" onClick={() => setSelectedBrand(null)} className="hover:text-black cursor-pointer">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+                {maxPrice < 10000 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-neutral-200/80 px-2.5 py-1 text-[11px] font-semibold text-neutral-800">
+                    <span>Under ₹{maxPrice.toLocaleString("en-IN")}</span>
+                    <button type="button" onClick={() => setMaxPrice(10000)} className="hover:text-black cursor-pointer">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  className="text-[11px] font-bold text-red-600 hover:underline cursor-pointer ml-1"
+                >
+                  Reset all
+                </button>
+              </div>
+            )}
+
+            {/* Error or Empty State */}
+            {error ? (
+              <div className="rounded-3xl border border-red-200 bg-white p-12 text-center shadow-xs">
+                <p className="text-sm font-bold text-red-600">Failed to load shop items</p>
+                <button
+                  type="button"
+                  onClick={fetchShopData}
+                  className="mt-3 rounded-xl bg-black px-4 py-2 text-xs font-bold text-white cursor-pointer"
+                >
+                  Try Again
+                </button>
+              </div>
+            ) : filteredProducts.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-16 text-center shadow-2xs">
+                <p className="text-base font-bold text-neutral-800">No products match your filters</p>
+                <p className="text-xs text-neutral-500 mt-1">Try resetting some filters or searching for another term.</p>
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  className="mt-4 rounded-xl bg-black px-4 py-2 text-xs font-bold text-white cursor-pointer hover:bg-neutral-800"
+                >
+                  Clear all filters
+                </button>
+              </div>
+            ) : (
+              /* ================= 4-COLUMN PRODUCT GRID ================= */
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5 animate-pop-in">
+                {filteredProducts.map((product) => {
+                  const isWishlisted = wishlist.has(String(product.id));
+
+                  return (
+                    <article
+                      key={product.id}
+                      className="group flex flex-col rounded-2xl border border-gray-200/80 bg-white p-3 sm:p-3.5 shadow-2xs hover:shadow-md transition-all duration-200"
+                    >
+                      {/* Product Image Container */}
+                      <div className="relative aspect-square w-full rounded-xl bg-[#f7f7f7] border border-gray-100 flex items-center justify-center p-3 overflow-hidden">
+                        <img
+                          src={product.image}
+                          alt={product.name}
+                          className="h-full w-full object-contain object-center transition duration-200 group-hover:scale-105"
+                          loading="lazy"
+                        />
+
+                        {/* Heart Wishlist Button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleWishlist(product.id);
+                          }}
+                          className="absolute top-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 backdrop-blur-xs text-gray-500 hover:text-red-500 transition shadow-xs cursor-pointer"
+                          aria-label="Wishlist item"
+                        >
+                          <Heart
+                            className={`h-4 w-4 transition ${
+                              isWishlisted ? "fill-red-500 text-red-500 scale-110" : "text-neutral-500"
+                            }`}
+                          />
+                        </button>
+
+                        {/* AI Wardrobe Gap Match Badge */}
+                        {product.is_wardrobe_match && (
+                          <div className="absolute top-2.5 left-2.5">
+                            <span className="rounded-full bg-black/85 backdrop-blur-md px-2 py-0.5 text-[9px] font-extrabold text-amber-300 shadow-xs flex items-center gap-1">
+                              <Sparkles className="h-2.5 w-2.5 fill-amber-300" />
+                              <span>Match</span>
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Product Meta */}
+                      <div className="mt-3 flex flex-1 flex-col justify-between">
+                        <div>
+                          <p className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">
+                            {product.brand || "WearWise"}
+                          </p>
+                          <h3 className="mt-0.5 text-xs sm:text-sm font-bold text-neutral-950 truncate leading-tight">
+                            {product.name}
+                          </h3>
+                          <p className="mt-1 text-sm sm:text-base font-extrabold text-neutral-950">
+                            ₹{product.price.toLocaleString("en-IN")}
+                          </p>
+                        </div>
+
+                        {/* View Product Button */}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProduct(product)}
+                          className="mt-3 w-full rounded-xl bg-[#111111] py-2.5 text-xs font-bold text-white transition hover:bg-black active:scale-98 cursor-pointer shadow-xs text-center"
+                        >
+                          View Product
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ================= MOBILE FILTERS DRAWER ================= */}
+      {mobileFiltersOpen && (
+        <div
+          className="fixed inset-0 z-50 flex bg-black/50 backdrop-blur-xs lg:hidden"
+          onClick={() => setMobileFiltersOpen(false)}
+        >
+          <div
+            className="w-80 max-w-[85vw] h-full bg-white p-6 shadow-2xl overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-4 border-b border-gray-200">
+              <h2 className="text-lg font-black text-neutral-950">Filters</h2>
+              <button
+                type="button"
+                onClick={() => setMobileFiltersOpen(false)}
+                className="rounded-full p-1 text-gray-400 hover:text-black cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Categories */}
+            <div className="py-4 border-b border-gray-200">
+              <p className="text-sm font-bold text-neutral-900 mb-3">Category</p>
+              <div className="space-y-2.5">
+                {CATEGORY_OPTIONS.map((cat) => (
+                  <label key={cat} className="flex items-center gap-2.5 text-xs font-medium text-neutral-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCategories.includes(cat)}
+                      onChange={() => toggleCategory(cat)}
+                      className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black cursor-pointer accent-black"
+                    />
+                    <span>{cat}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Price */}
+            <div className="py-4 border-b border-gray-200">
+              <p className="text-sm font-bold text-neutral-900 mb-3">Price Range</p>
+              <input
+                type="range"
+                min={500}
+                max={10000}
+                step={200}
+                value={maxPrice}
+                onChange={(e) => setMaxPrice(Number(e.target.value))}
+                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black"
+              />
+              <div className="mt-2 flex items-center justify-between text-xs font-semibold text-neutral-600">
+                <span>₹0</span>
+                <span className="font-bold text-black">₹{maxPrice.toLocaleString("en-IN")}</span>
+              </div>
+            </div>
+
+            {/* Colors */}
+            <div className="py-4 border-b border-gray-200">
+              <p className="text-sm font-bold text-neutral-900 mb-3">Color</p>
+              <div className="flex flex-wrap items-center gap-2.5">
+                {COLOR_SWATCHES.map((swatch) => {
+                  const isSelected = selectedColor === swatch.name;
+                  return (
+                    <button
+                      key={swatch.name}
+                      type="button"
+                      onClick={() => setSelectedColor(isSelected ? null : swatch.name)}
+                      className={`h-7 w-7 rounded-full shadow-2xs ${swatch.border} ${
+                        isSelected ? "ring-2 ring-offset-2 ring-black scale-110" : ""
+                      }`}
+                      style={{ backgroundColor: swatch.hex }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="mt-6 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleClearAll}
+                className="flex-1 rounded-xl border border-gray-200 py-3 text-xs font-bold text-neutral-700 hover:bg-gray-50 cursor-pointer"
+              >
+                Clear all
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileFiltersOpen(false)}
+                className="flex-1 rounded-xl bg-black py-3 text-xs font-bold text-white hover:bg-neutral-800 cursor-pointer"
+              >
+                Apply Filters
               </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-      </div>
-
-      {/* ================= LUXURY PRODUCT INSPECTOR MODAL ================= */}
+      {/* ================= PRODUCT INSPECTOR MODAL ================= */}
       {selectedProduct && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-pop-in"
@@ -317,21 +767,21 @@ export default function NextPurchasePage() {
           onClick={() => setSelectedProduct(null)}
         >
           <section
-            className="w-full max-w-2xl overflow-hidden rounded-3xl border border-white/20 bg-white shadow-2xl"
+            className="w-full max-w-xl overflow-hidden rounded-3xl border border-white/20 bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-[#eceef0] px-6 py-4">
+            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
               <div className="flex items-center gap-2">
                 <span className="text-sm">🛍️</span>
                 <p className="text-xs font-bold uppercase tracking-wider text-gray-500">
-                  Product Inspector
+                  {selectedProduct.brand || "WearWise"}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedProduct(null)}
-                className="flex h-7 w-7 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-black cursor-pointer"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-black cursor-pointer"
                 aria-label="Close modal"
               >
                 ✕
@@ -339,9 +789,9 @@ export default function NextPurchasePage() {
             </div>
 
             {/* Modal Body */}
-            <div className="grid sm:grid-cols-[1fr_1.1fr]">
+            <div className="grid sm:grid-cols-2">
               {/* Product Visual */}
-              <div className="relative aspect-[4/5] bg-[#f7f7f5] p-6 flex items-center justify-center border-b sm:border-b-0 sm:border-r border-[#eceef0]">
+              <div className="relative aspect-square bg-[#f8f8f8] p-6 flex items-center justify-center border-b sm:border-b-0 sm:border-r border-gray-100">
                 <img
                   src={selectedProduct.image}
                   alt={selectedProduct.name}
@@ -349,45 +799,68 @@ export default function NextPurchasePage() {
                 />
               </div>
 
-              {/* Product Info & Multiplier Context */}
+              {/* Product Details */}
               <div className="flex flex-col justify-between p-6">
                 <div>
-                  <span className="inline-block rounded-full bg-black/5 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-600">
-                    {selectedProduct.brand}
+                  <span className="inline-block rounded-full bg-neutral-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-neutral-700">
+                    {selectedProduct.group || selectedProduct.category}
                   </span>
 
-                  <h2 className="mt-2 text-xl font-extrabold tracking-tight text-gray-950">
+                  <h2 className="mt-2 text-xl font-extrabold tracking-tight text-neutral-950">
                     {selectedProduct.name}
                   </h2>
 
-                  <div className="mt-3 flex items-center gap-2 text-xs text-gray-600">
-                    <span className="capitalize">{selectedProduct.fit} fit</span>
-                    <span>•</span>
-                    <span className="capitalize">{selectedProduct.color}</span>
-                    <span>•</span>
-                    <span className="capitalize">{selectedProduct.category}</span>
+                  <div className="mt-2 flex items-center gap-2 text-xs text-neutral-500 capitalize">
+                    <span>{selectedProduct.color}</span>
+                    {selectedProduct.fit && (
+                      <>
+                        <span>•</span>
+                        <span>{selectedProduct.fit} fit</span>
+                      </>
+                    )}
                   </div>
 
-                  <p className="mt-4 text-2xl font-black text-gray-950">
+                  <p className="mt-3 text-2xl font-black text-neutral-950">
                     ₹{selectedProduct.price.toLocaleString("en-IN")}
                   </p>
 
-                  <div className="mt-5 rounded-2xl bg-[#fffaf0] border border-[#f5e3ba] p-3 text-xs text-amber-900">
-                    <p className="font-bold">✦ Wardrobe Multiplier Impact</p>
-                    <p className="mt-0.5 text-gray-700 leading-relaxed text-[11px]">
-                      This piece pairs directly with your existing jeans, chinos, and shoes to multiply your weekly look options.
+                  {/* Wardrobe Multiplier Callout */}
+                  <div className="mt-4 rounded-2xl bg-[#fffaf0] border border-[#f5e3ba] p-3 text-xs text-amber-900">
+                    <p className="font-bold flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-amber-600 fill-amber-500" />
+                      <span>Why This Fits Your Style</span>
+                    </p>
+                    <p className="mt-1 text-neutral-700 leading-relaxed text-[11px]">
+                      {selectedProduct.reason ||
+                        "A foundational wardrobe multiplier piece designed to effortlessly pair with your existing rotation."}
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-6 border-t border-[#eceef0] pt-4">
+                {/* Modal Actions */}
+                <div className="mt-6 flex items-center gap-2 border-t border-gray-100 pt-4">
                   <button
                     type="button"
-                    onClick={() => setSelectedProduct(null)}
-                    className="w-full rounded-xl bg-[#171717] py-3 text-xs font-bold text-white transition hover:bg-black cursor-pointer shadow-sm"
+                    onClick={() => toggleWishlist(selectedProduct.id)}
+                    className="rounded-xl border border-gray-200 p-2.5 text-gray-600 hover:text-red-500 hover:bg-gray-50 cursor-pointer transition"
+                    title="Wishlist item"
                   >
-                    Close Preview
+                    <Heart
+                      className={`h-4 w-4 ${
+                        wishlist.has(String(selectedProduct.id)) ? "fill-red-500 text-red-500" : ""
+                      }`}
+                    />
                   </button>
+
+                  <a
+                    href={selectedProduct.store_url || "#"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-black py-2.5 text-xs font-bold text-white hover:bg-neutral-800 transition active:scale-98 shadow-sm"
+                  >
+                    <span>View on Store</span>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
                 </div>
               </div>
             </div>

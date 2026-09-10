@@ -14,6 +14,7 @@ from app.schemas.wardrobe import (
 )
 from app.services.wardrobe_gap import recommend_next_item
 from app.services.products import get_products_for_color, get_products_for_recommendation
+from app.services.shopping_search import search_store_products, get_all_catalog_products
 from app.services.vision import analyze_garment_image
 from app.core.dependencies import get_current_user
 
@@ -320,6 +321,8 @@ def delete_wardrobe_item(
 @router.get("/{user_id}/next-purchase")
 def next_purchase(
     user_id: int,
+    store: str | None = None,
+    max_price: int | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -352,13 +355,42 @@ def next_purchase(
         }
 
     for recommendation in recommendations:
-        products = get_products_for_recommendation(
-            category=recommendation.get("category", "shirt"),
-            color=recommendation["color"]
+        cat = recommendation.get("category", "shirt")
+        col = recommendation.get("color", "white")
+        store_products = search_store_products(
+            category=cat,
+            color=col,
+            store_filter=store,
+            max_price=max_price,
+            limit=4
         )
-        recommendation["products"] = products
+        if not store_products:
+            # Resilient fallback
+            store_products = get_products_for_recommendation(
+                category=cat,
+                color=col
+            )
+        recommendation["products"] = store_products
+
+    # Build complete curated catalog with wardrobe match indicators
+    all_catalog = get_all_catalog_products(store_filter=store, max_price=max_price)
+    
+    missing_targets = {
+        (r.get("category", "").lower(), r.get("color", "").lower()): r.get("new_outfit_combinations", 0)
+        for r in recommendations
+    }
+    for item in all_catalog:
+        item_copy = dict(item)
+        key = (item.get("category", "").lower(), item.get("color", "").lower())
+        if key in missing_targets:
+            item_copy["is_wardrobe_match"] = True
+            item_copy["multiplier"] = missing_targets[key]
+        else:
+            item_copy["is_wardrobe_match"] = False
+            item_copy["multiplier"] = None
 
     return {
         "user_id": user_id,
-        "recommendations": recommendations
+        "recommendations": recommendations,
+        "all_products": all_catalog
     }
