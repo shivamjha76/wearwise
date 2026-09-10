@@ -381,14 +381,13 @@ def next_purchase(
         for r in recommendations
     }
     for item in all_catalog:
-        item_copy = dict(item)
         key = (item.get("category", "").lower(), item.get("color", "").lower())
         if key in missing_targets:
-            item_copy["is_wardrobe_match"] = True
-            item_copy["multiplier"] = missing_targets[key]
+            item["is_wardrobe_match"] = True
+            item["multiplier"] = missing_targets[key]
         else:
-            item_copy["is_wardrobe_match"] = False
-            item_copy["multiplier"] = None
+            item["is_wardrobe_match"] = False
+            item["multiplier"] = None
 
     return {
         "user_id": user_id,

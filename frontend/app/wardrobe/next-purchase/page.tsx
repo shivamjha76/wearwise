@@ -71,15 +71,20 @@ const COLOR_SWATCHES = [
 
 const POPULAR_BRANDS = [
   "H&M",
+  "The Souled Store",
+  "Snitch",
+  "Red Tape",
+  "Max",
+  "Roadster",
+  "Cava",
+  "Calvin Klein",
+  "Mast & Harbour",
+  "Liberty",
   "Uniqlo",
   "Levi's",
-  "Nike",
   "Zara",
+  "Nike",
   "Fossil",
-  "Roadster",
-  "Puma",
-  "Marks & Spencer",
-  "Dennis Lingo",
 ];
 
 export default function ShopPage() {
@@ -635,6 +640,12 @@ export default function ShopPage() {
                           alt={product.name}
                           className="h-full w-full object-contain object-center transition duration-200 group-hover:scale-105"
                           loading="lazy"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            if (!target.src.includes("/shop/banner_flatlay.png")) {
+                              target.src = "/shop/banner_flatlay.png";
+                            }
+                          }}
                         />
 
                         {/* Heart Wishlist Button */}
@@ -834,6 +845,12 @@ export default function ShopPage() {
                   src={selectedProduct.image}
                   alt={selectedProduct.name}
                   className="h-full w-full object-contain object-center"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    if (!target.src.includes("/shop/banner_flatlay.png")) {
+                      target.src = "/shop/banner_flatlay.png";
+                    }
+                  }}
                 />
               </div>
 

@@ -71,5 +71,7 @@ Thumbs.db
 backend/uploads/*
 !backend/uploads/.gitkeep
 
+# Scratch
+scratch/
 
 .vercel
