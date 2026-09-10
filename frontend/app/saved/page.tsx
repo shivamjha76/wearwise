@@ -108,6 +108,7 @@ export default function SavedOutfitsPage() {
   const [outfits, setOutfits] = useState<SavedOutfit[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -116,6 +117,17 @@ export default function SavedOutfitsPage() {
     const t = setTimeout(() => setToastMessage(null), 3500);
     return () => clearTimeout(t);
   }, [toastMessage]);
+
+  // Handle ESC key to dismiss confirmation modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && deleteTargetId !== null && !deletingId) {
+        setDeleteTargetId(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [deleteTargetId, deletingId]);
 
   const fetchSavedOutfits = async (userId: number) => {
     try {
@@ -128,10 +140,10 @@ export default function SavedOutfitsPage() {
       }
 
       const data = await res.json();
-      setOutfits(data);
+      setOutfits(data || []);
     } catch (err) {
       console.error(err);
-      setToastMessage("Could not load lookbook.");
+      setToastMessage("Could not fetch saved outfits.");
     } finally {
       setLoading(false);
     }
@@ -146,10 +158,9 @@ export default function SavedOutfitsPage() {
     fetchSavedOutfits(user.id);
   }, [router]);
 
-  const handleDelete = async (outfitId: number) => {
-    if (!confirm("Are you sure you want to remove this look from your lookbook?")) {
-      return;
-    }
+  const handleConfirmDelete = async () => {
+    if (!deleteTargetId) return;
+    const outfitId = deleteTargetId;
 
     setDeletingId(outfitId);
     try {
@@ -164,11 +175,13 @@ export default function SavedOutfitsPage() {
 
       setOutfits((prev) => prev.filter((o) => o.id !== outfitId));
       setToastMessage("Look removed from Lookbook.");
+      setDeleteTargetId(null);
     } catch (err) {
       console.error(err);
       setToastMessage("Failed to remove outfit.");
     } finally {
       setDeletingId(null);
+      setDeleteTargetId(null);
     }
   };
 
@@ -370,7 +383,7 @@ export default function SavedOutfitsPage() {
 
                   <button
                     type="button"
-                    onClick={() => handleDelete(outfit.id)}
+                    onClick={() => setDeleteTargetId(outfit.id)}
                     disabled={deletingId === outfit.id}
                     className="font-semibold text-red-600 hover:text-red-800 transition disabled:opacity-50 cursor-pointer text-[11px]"
                   >
@@ -383,6 +396,61 @@ export default function SavedOutfitsPage() {
         )}
 
       </div>
+
+      {/* ================= PROFESSIONAL CONFIRMATION MODAL ================= */}
+      {deleteTargetId !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fade-in"
+          onClick={() => {
+            if (!deletingId) setDeleteTargetId(null);
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl bg-white p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-[#e2e4e7] animate-pop-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600 border border-red-100 text-lg shadow-2xs">
+                🗑️
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base sm:text-lg font-bold text-gray-950">
+                  Remove Look from Lookbook?
+                </h3>
+                <p className="mt-1.5 text-xs sm:text-sm text-gray-500 leading-relaxed">
+                  This outfit combination will be removed from your personal saved archive. You can curate and save it again anytime.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2.5 border-t border-[#eceef0] pt-4">
+              <button
+                type="button"
+                disabled={deletingId !== null}
+                onClick={() => setDeleteTargetId(null)}
+                className="rounded-xl border border-gray-200 bg-[#fbfbf9] px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-100 transition cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingId !== null}
+                onClick={handleConfirmDelete}
+                className="flex items-center gap-1.5 rounded-xl bg-red-600 px-5 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-red-700 transition active:scale-95 disabled:opacity-50 cursor-pointer"
+              >
+                {deletingId !== null ? (
+                  <>
+                    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    <span>Removing...</span>
+                  </>
+                ) : (
+                  <span>Yes, Remove Look</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
