@@ -47,26 +47,73 @@ type LiveWeatherData = {
   is_precipitation: boolean;
 };
 
+// 3 to 4 words animated taglines with typewriter effect
+const STYLE_TAGLINES = [
+  "Effortless outfits, styled instantly.",
+  "Smart looks, zero effort.",
+  "Perfect combinations, curated daily.",
+  "Style made beautifully simple.",
+];
+
+function AnimatedStyleTagline() {
+  const [index, setIndex] = useState(0);
+  const [subIndex, setSubIndex] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+
+  useEffect(() => {
+    if (isPaused) {
+      const pauseTimer = setTimeout(() => {
+        setIsPaused(false);
+        setIsDeleting(true);
+      }, 2200);
+      return () => clearTimeout(pauseTimer);
+    }
+
+    if (isDeleting) {
+      if (subIndex === 0) {
+        setIsDeleting(false);
+        setIndex((prev) => (prev + 1) % STYLE_TAGLINES.length);
+        return;
+      }
+      const deleteTimer = setTimeout(() => {
+        setSubIndex((prev) => prev - 1);
+      }, 35);
+      return () => clearTimeout(deleteTimer);
+    }
+
+    if (subIndex === STYLE_TAGLINES[index].length) {
+      setIsPaused(true);
+      return;
+    }
+
+    const typeTimer = setTimeout(() => {
+      setSubIndex((prev) => prev + 1);
+    }, 75);
+
+    return () => clearTimeout(typeTimer);
+  }, [subIndex, index, isDeleting, isPaused]);
+
+  return (
+    <div className="mt-2 flex items-center min-h-[28px]">
+      <p className="text-sm sm:text-base font-medium text-gray-500 tracking-tight flex items-center gap-1.5">
+        <span className="text-neutral-400 text-xs sm:text-sm">✨</span>
+        <span className="text-neutral-900 font-semibold tracking-tight">
+          {STYLE_TAGLINES[index].substring(0, subIndex)}
+        </span>
+        <span className="inline-block w-[2px] h-4 sm:h-[18px] bg-black align-middle animate-pulse" />
+      </p>
+    </div>
+  );
+}
+
 // ================= CONFIGURATION =================
 const OCCASIONS = [
-  { value: "casual", label: "Casual", icon: "☕", desc: "Relaxed daily comfort" },
-  { value: "college", label: "College", icon: "🎒", desc: "Effortless campus style" },
-  { value: "party", label: "Party", icon: "🥂", desc: "Bold statement energy" },
-  { value: "interview", label: "Interview", icon: "💼", desc: "Sharp professional polish" },
-  { value: "date", label: "Date", icon: "🍷", desc: "Sophisticated understated charm" },
-];
-
-const WEATHER_OPTIONS = [
-  { value: "warm", label: "Warm", icon: "☀️", temp: "22°C+" },
-  { value: "cool", label: "Cool", icon: "🍂", temp: "14°C–21°C" },
-  { value: "cold", label: "Cold", icon: "❄️", temp: "< 14°C" },
-];
-
-const STYLE_VIBES = [
-  { value: "minimal", label: "Clean Minimal", icon: "♧" },
-  { value: "casual", label: "Casual", icon: "□" },
-  { value: "streetwear", label: "Streetwear", icon: "⚡" },
-  { value: "formal", label: "Smart Formal", icon: "✦" },
+  { value: "casual", label: "Casual", icon: "☕" },
+  { value: "college", label: "College", icon: "🎒" },
+  { value: "party", label: "Party", icon: "🥂" },
+  { value: "interview", label: "Interview", icon: "💼" },
+  { value: "date", label: "Date", icon: "🍷" },
 ];
 
 const COLOR_MAP: Record<string, string> = {
@@ -151,11 +198,7 @@ export default function StylePage() {
 
   const [occasion, setOccasion] = useState("casual");
   const [weather, setWeather] = useState("warm");
-  const [styleVibe, setStyleVibe] = useState("minimal");
-
-  const [liveWeather, setLiveWeather] = useState<LiveWeatherData | null>(null);
-  const [weatherLoading, setWeatherLoading] = useState(false);
-  const [weatherError, setWeatherError] = useState("");
+  const [styleVibe, setStyleVibe] = useState("casual");
 
   const [outfit, setOutfit] = useState<OutfitResponse | null>(null);
   const [wardrobe, setWardrobe] = useState<WardrobeItem[]>([]);
@@ -169,51 +212,37 @@ export default function StylePage() {
     const user = getStoredUser();
     if (!user) {
       router.push("/login");
-    }
-  }, [router]);
-
-  const detectLocalWeather = () => {
-    if (typeof window === "undefined" || !navigator.geolocation) {
-      setWeatherError("Geolocation is not supported by your browser.");
       return;
     }
 
-    setWeatherLoading(true);
-    setWeatherError("");
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const lat = pos.coords.latitude;
-          const lon = pos.coords.longitude;
-          const res = await fetch(`${API_BASE_URL}/weather/current?lat=${lat}&lon=${lon}`);
-          if (!res.ok) {
-            throw new Error("Failed to fetch weather forecast");
+    // AI silently detects local climate in background without bothering the user
+    if (typeof window !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          try {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            const res = await fetch(`${API_BASE_URL}/weather/current?lat=${lat}&lon=${lon}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data.weather_category) {
+                setWeather(data.weather_category);
+              }
+            }
+          } catch {
+            // Silently retain default/seasonal
           }
-          const data: LiveWeatherData = await res.json();
-          setLiveWeather(data);
-          if (data.weather_category) {
-            setWeather(data.weather_category);
-          }
-        } catch (err) {
-          console.error(err);
-          setWeatherError("Could not retrieve live weather forecast.");
-        } finally {
-          setWeatherLoading(false);
-        }
-      },
-      (geoErr) => {
-        console.warn("Geolocation error:", geoErr);
-        setWeatherLoading(false);
-        if (geoErr.code === geoErr.PERMISSION_DENIED) {
-          setWeatherError("Location access denied. You can select weather manually below.");
-        } else {
-          setWeatherError("Could not pinpoint location. Please pick weather manually below.");
-        }
-      },
-      { timeout: 8000 }
-    );
-  };
+        },
+        () => {
+          // Silent fallback to seasonal estimate (northern hemisphere)
+          const month = new Date().getMonth();
+          const seasonal = [10, 11, 0, 1].includes(month) ? "cold" : [2, 9].includes(month) ? "cool" : "warm";
+          setWeather(seasonal);
+        },
+        { timeout: 6000 }
+      );
+    }
+  }, [router]);
 
   const generateOutfit = async () => {
     const user = getStoredUser();
@@ -336,47 +365,23 @@ export default function StylePage() {
       <div className="mx-auto max-w-6xl">
         
         {/* ================= HEADER ================= */}
-        <div className="mb-8 border-b border-[#e2e4e7] pb-8">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#dedad0] bg-white/90 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#45546a] shadow-2xs backdrop-blur-md">
-                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>AI Outfit Architect</span>
-              </div>
-              <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">
-                Curate Today&apos;s Look
-              </h1>
-              <p className="mt-1 max-w-xl text-xs sm:text-sm text-gray-600">
-                Select your context below. WearWise dynamically pairs your existing clothes for effortless harmony.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              <Link
-                href="/wardrobe"
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-[#d4d6da] bg-white px-4 text-xs font-semibold text-gray-800 shadow-2xs transition hover:bg-gray-50 active:scale-95"
-              >
-                <span>👕 My Wardrobe</span>
-              </Link>
-              <Link
-                href="/saved"
-                className="inline-flex h-11 items-center justify-center rounded-xl bg-white border border-[#d4d6da] px-4 text-xs font-semibold text-gray-800 shadow-2xs transition hover:bg-gray-50 active:scale-95"
-              >
-                <span>★ Saved Looks</span>
-              </Link>
-            </div>
+        <div className="mb-8 border-b border-[#e2e4e7] pb-6">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">
+              Curate Today&apos;s Look
+            </h1>
+            <AnimatedStyleTagline />
           </div>
         </div>
 
         {/* ================= TACTILE CONFIGURATION STUDIO ================= */}
         <section className="rounded-3xl border border-[#e2e4e7] bg-white p-6 shadow-[0_10px_30px_rgba(27,35,43,0.04)]">
-          
           {/* Row 1: Occasion Chips */}
           <div>
-            <label className="mb-2.5 block text-xs font-bold uppercase tracking-wider text-gray-700">
-              1. Select Occasion
+            <label className="mb-3 block text-xs font-bold uppercase tracking-wider text-gray-700">
+              Select Occasion
             </label>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
               {OCCASIONS.map((occ) => {
                 const isSelected = occasion === occ.value;
                 return (
@@ -384,170 +389,43 @@ export default function StylePage() {
                     key={occ.value}
                     type="button"
                     onClick={() => setOccasion(occ.value)}
-                    className={`flex flex-col items-start rounded-2xl border p-3 text-left transition-all cursor-pointer ${
+                    className={`flex flex-col items-center justify-center rounded-2xl border py-4 px-3 text-center transition-all cursor-pointer ${
                       isSelected
-                        ? "border-black bg-[#171717] text-white shadow-xs"
+                        ? "border-black bg-[#171717] text-white shadow-xs scale-[1.02]"
                         : "border-gray-200 bg-[#fbfbf9] text-gray-800 hover:border-gray-400 hover:bg-white"
                     }`}
                   >
-                    <span className="text-xl">{occ.icon}</span>
+                    <span className="text-2xl">{occ.icon}</span>
                     <span className="mt-2 text-xs font-bold">{occ.label}</span>
-                    <span
-                      className={`mt-0.5 text-[10px] line-clamp-1 ${
-                        isSelected ? "text-gray-300" : "text-gray-500"
-                      }`}
-                    >
-                      {occ.desc}
-                    </span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Live Real-Time Weather Integration Bar */}
-          <div className="mt-6 rounded-2xl border border-[#eceef0] bg-[#fbfbf9] p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-lg shadow-2xs">
-                  {liveWeather ? liveWeather.icon : "📍"}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-xs font-bold text-gray-900">
-                      {liveWeather ? (
-                        <span>
-                          {liveWeather.city} · {liveWeather.temperature}°C {liveWeather.condition}
-                        </span>
-                      ) : (
-                        "Real-Time Weather Calibrator"
-                      )}
-                    </p>
-                    {liveWeather && (
-                      <span className="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.2 text-[9px] font-bold uppercase tracking-wider">
-                        Calibrated ({liveWeather.weather_category}) ✓
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-[11px] text-gray-500 max-w-xl leading-relaxed">
-                    {liveWeather
-                      ? liveWeather.styling_tip
-                      : "Detect your live local forecast to automatically calibrate fabric weights, layers, and footwear recommendations."}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={detectLocalWeather}
-                disabled={weatherLoading}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-bold text-gray-800 shadow-2xs hover:bg-gray-50 transition active:scale-95 disabled:opacity-60 cursor-pointer shrink-0"
-              >
-                {weatherLoading ? (
-                  <>
-                    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-gray-400 border-t-black" />
-                    <span>Pinpointing...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>{liveWeather ? "↻ Refresh Weather" : "📍 Detect Local Weather"}</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            {weatherError && (
-              <p className="mt-2 text-[11px] text-amber-800 font-medium">
-                ⚠️ {weatherError}
-              </p>
-            )}
-          </div>
-
-          {/* Row 2: Weather & Style Segmented Controls + Action Button */}
-          <div className="mt-6 grid gap-4 md:grid-cols-[1fr_1.3fr_auto] items-end border-t border-[#eceef0] pt-5">
-            
-            {/* Weather Pills */}
-            <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700">
-                  2. Weather Context
-                </label>
-                {liveWeather && (
-                  <span className="text-[10px] text-emerald-700 font-semibold">
-                    {liveWeather.temperature}°C ({weather})
-                  </span>
-                )}
-              </div>
-              <div className="grid grid-cols-3 gap-1 rounded-xl bg-[#f4f5f6] p-1">
-                {WEATHER_OPTIONS.map((w) => {
-                  const isSelected = weather === w.value;
-                  return (
-                    <button
-                      key={w.value}
-                      type="button"
-                      onClick={() => setWeather(w.value)}
-                      className={`flex items-center justify-center gap-1 rounded-lg py-2 text-center text-xs font-semibold transition-all cursor-pointer ${
-                        isSelected
-                          ? "bg-white text-black shadow-2xs"
-                          : "text-gray-500 hover:text-black"
-                      }`}
-                    >
-                      <span>{w.icon}</span>
-                      <span>{w.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Style Vibe Pills */}
-            <div>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-gray-700">
-                3. Style Vibe
-              </label>
-              <div className="grid grid-cols-4 gap-1 rounded-xl bg-[#f4f5f6] p-1">
-                {STYLE_VIBES.map((s) => {
-                  const isSelected = styleVibe === s.value;
-                  return (
-                    <button
-                      key={s.value}
-                      type="button"
-                      onClick={() => setStyleVibe(s.value)}
-                      className={`flex items-center justify-center gap-1 rounded-lg py-2 text-center text-xs font-semibold transition-all cursor-pointer ${
-                        isSelected
-                          ? "bg-white text-black shadow-2xs"
-                          : "text-gray-500 hover:text-black"
-                      }`}
-                    >
-                      <span>{s.icon}</span>
-                      <span className="truncate">{s.label.split(" ")[0]}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Primary Generate Button */}
-            <div>
-              <button
-                type="button"
-                onClick={generateOutfit}
-                disabled={loading}
-                className="flex h-11 w-full md:w-auto items-center justify-center gap-2 rounded-xl bg-[#171717] px-6 text-xs font-bold text-white shadow-sm transition hover:bg-black active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                {loading ? (
-                  <>
-                    <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                    <span>Styling...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Generate Outfit</span>
-                    <span>✦</span>
-                  </>
-                )}
-              </button>
-            </div>
+          {/* Action Row */}
+          <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-[#eceef0] pt-5">
+            <p className="text-xs text-gray-500 font-medium">
+              ✨ AI automatically pairs your clothes based on occasion and live climate.
+            </p>
+            <button
+              type="button"
+              onClick={generateOutfit}
+              disabled={loading}
+              className="flex h-11 w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-[#171717] px-8 text-xs font-bold text-white shadow-sm transition hover:bg-black active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shrink-0"
+            >
+              {loading ? (
+                <>
+                  <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  <span>Styling Outfit...</span>
+                </>
+              ) : (
+                <>
+                  <span>Generate Outfit</span>
+                  <span>✦</span>
+                </>
+              )}
+            </button>
           </div>
         </section>
 
@@ -810,14 +688,11 @@ export default function StylePage() {
             <h2 className="mt-4 text-xl font-extrabold text-gray-950">
               Ready to find your look?
             </h2>
-            <p className="mx-auto mt-1 max-w-md text-xs sm:text-sm text-gray-600">
-              Pick your occasion and weather above, then tap <strong className="text-black">Generate Outfit</strong>. WearWise will match clothes you already own with zero clashing.
-            </p>
 
             <button
               type="button"
               onClick={generateOutfit}
-              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#171717] px-7 py-3 text-xs font-bold text-white shadow-sm transition hover:bg-black active:scale-95 cursor-pointer"
+              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#171717] px-8 py-3 text-xs font-bold text-white shadow-sm transition hover:bg-black active:scale-95 cursor-pointer"
             >
               <span>Generate My Outfit</span>
               <span>✦</span>
