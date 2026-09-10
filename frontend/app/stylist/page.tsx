@@ -21,10 +21,20 @@ type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
+  attachment_type?: "image" | "file" | null;
   recommended_items?: WardrobeItem[];
   occasion?: string | null;
   engine?: string | null;
   timestamp: string;
+};
+
+type ChatSession = {
+  id: string;
+  title: string;
+  timestamp: string;
+  messages: ChatMessage[];
 };
 
 type EngineInfo = {
@@ -151,15 +161,24 @@ export default function StylistPage() {
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
 
-  // API Key Connection Modal
-  const [showKeyModal, setShowKeyModal] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState("");
-  const [selectedProvider, setSelectedProvider] = useState<"gemini" | "openai">("gemini");
-  const [savingKey, setSavingKey] = useState(false);
+  // Left Sidebar Drawer & Chat History (Max 5)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [chatHistory, setChatHistory] = useState<ChatSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string>(() => `session-${Date.now()}`);
+
+  // Attachment Menu & File State
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [attachedFile, setAttachedFile] = useState<{
+    url: string;
+    name: string;
+    type: "image" | "file";
+  } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const initialInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
 
@@ -176,6 +195,21 @@ export default function StylistPage() {
     const t = setTimeout(() => setToastMessage(null), 3500);
     return () => clearTimeout(t);
   }, [toastMessage]);
+
+  // Load chat history from localStorage on initial render
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("wearwise_veya_history");
+      if (stored) {
+        const parsed: ChatSession[] = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setChatHistory(parsed.slice(0, 5));
+        }
+      }
+    } catch (err) {
+      console.error("Could not load chat history from localStorage:", err);
+    }
+  }, []);
 
   useEffect(() => {
     const user = getStoredUser();
@@ -219,6 +253,70 @@ export default function StylistPage() {
     fetchEngineStatus();
   }, [router]);
 
+  // Sync current conversation to chatHistory (Max 5 items)
+  const saveSessionToHistory = (newMessages: ChatMessage[]) => {
+    if (newMessages.length === 0) return;
+    const firstUserMsg = newMessages.find((m) => m.role === "user");
+    const rawTitle = firstUserMsg ? firstUserMsg.content.trim() : "Styling Conversation";
+    const title = rawTitle.length > 32 ? rawTitle.slice(0, 32) + "..." : rawTitle;
+
+    setChatHistory((prev) => {
+      const existingIdx = prev.findIndex((s) => s.id === currentSessionId);
+      const sessionObj: ChatSession = {
+        id: currentSessionId,
+        title,
+        timestamp: new Date().toLocaleDateString([], { month: "short", day: "numeric" }),
+        messages: newMessages,
+      };
+
+      let updated: ChatSession[];
+      if (existingIdx >= 0) {
+        updated = [...prev];
+        updated[existingIdx] = sessionObj;
+      } else {
+        updated = [sessionObj, ...prev];
+      }
+
+      // Cap strictly at 5 past chats
+      const limited = updated.slice(0, 5);
+      try {
+        localStorage.setItem("wearwise_veya_history", JSON.stringify(limited));
+      } catch (err) {
+        console.error("Failed to save history to localStorage:", err);
+      }
+      return limited;
+    });
+  };
+
+  const loadSession = (session: ChatSession) => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    setSpeakingId(null);
+    setCurrentSessionId(session.id);
+    setMessages(session.messages);
+    setIsSidebarOpen(false);
+    setAttachedFile(null);
+    setToastMessage(`Loaded: "${session.title}"`);
+  };
+
+  const deleteSession = (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setChatHistory((prev) => {
+      const filtered = prev.filter((s) => s.id !== sessionId);
+      try {
+        localStorage.setItem("wearwise_veya_history", JSON.stringify(filtered));
+      } catch (err) {
+        console.error("Failed to update history in localStorage:", err);
+      }
+      return filtered;
+    });
+
+    if (currentSessionId === sessionId) {
+      resetChat();
+    }
+  };
+
   const resetChat = () => {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
@@ -226,8 +324,32 @@ export default function StylistPage() {
     setSpeakingId(null);
     setMessages([]);
     setInput("");
-    setToastMessage("Cleared conversation. Ready for a new styling prompt!");
+    setAttachedFile(null);
+    setShowAttachmentMenu(false);
+    setCurrentSessionId(`session-${Date.now()}`);
+    setIsSidebarOpen(false);
+    setToastMessage("Started a fresh styling session!");
     setTimeout(() => initialInputRef.current?.focus(), 150);
+  };
+
+  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isImage = file.type.startsWith("image/");
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setAttachedFile({
+        url: result,
+        name: file.name,
+        type: isImage ? "image" : "file",
+      });
+      setToastMessage(`Attached: ${file.name}`);
+    };
+    reader.readAsDataURL(file);
+    // Reset file input so user can pick same file again if desired
+    e.target.value = "";
   };
 
   const copyToClipboard = (text: string, id: string) => {
@@ -325,69 +447,29 @@ export default function StylistPage() {
     setToastMessage("No previous user question found to retry.");
   };
 
-  const handleSaveApiKey = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const key = apiKeyInput.trim();
-    if (!key) return;
-
-    setSavingKey(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/stylist/api-key`, {
-        method: "POST",
-        headers: {
-          ...getAuthHeaders(),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          provider: selectedProvider,
-          api_key: key,
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Failed to activate API Key");
-      }
-
-      const updatedInfo: EngineInfo = await res.json();
-      setEngineInfo(updatedInfo);
-      setShowKeyModal(false);
-      setApiKeyInput("");
-      setToastMessage(`Connected successfully to ${updatedInfo.label}!`);
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `engine-activated-${Date.now()}`,
-          role: "assistant",
-          content: `🎉 **${updatedInfo.label} is now active!**\n\nI am connected to Google Gemini. Ask me anything about outfits, color harmony, or styling your wardrobe!`,
-          engine: updatedInfo.engine,
-          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        },
-      ]);
-    } catch (err: unknown) {
-      console.error(err);
-      setToastMessage(err instanceof Error ? err.message : "Failed to connect API Key.");
-    } finally {
-      setSavingKey(false);
-    }
-  };
-
   const sendMessage = async (textToSend?: string) => {
     const messageContent = (textToSend !== undefined ? textToSend : input).trim();
-    if (!messageContent || loading || !currentUser) return;
+    if ((!messageContent && !attachedFile) || loading || !currentUser) return;
 
     setInput("");
+    setShowAttachmentMenu(false);
+
+    const activeAttachment = attachedFile;
+    setAttachedFile(null);
 
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: "user",
-      content: messageContent,
+      content: messageContent || "Please review the attached outfit photo.",
+      attachment_url: activeAttachment?.url || null,
+      attachment_name: activeAttachment?.name || null,
+      attachment_type: activeAttachment?.type || null,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
 
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
+    saveSessionToHistory(updatedMessages);
     setLoading(true);
 
     try {
@@ -403,7 +485,7 @@ export default function StylistPage() {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({
-          message: messageContent,
+          message: userMessage.content,
           history: historyPayload.slice(0, -1),
         }),
       });
@@ -425,7 +507,9 @@ export default function StylistPage() {
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      const finalMessages = [...updatedMessages, assistantMessage];
+      setMessages(finalMessages);
+      saveSessionToHistory(finalMessages);
     } catch (err: unknown) {
       console.error(err);
       const errorMessage: ChatMessage = {
@@ -437,7 +521,9 @@ export default function StylistPage() {
             : "⚠️ I couldn't process that styling request right now. Please verify your connection and try again.",
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
-      setMessages((prev) => [...prev, errorMessage]);
+      const finalMessages = [...updatedMessages, errorMessage];
+      setMessages(finalMessages);
+      saveSessionToHistory(finalMessages);
     } finally {
       setLoading(false);
       setTimeout(() => inputRef.current?.focus(), 100);
@@ -508,6 +594,23 @@ export default function StylistPage() {
 
   return (
     <main className="relative flex min-h-[calc(100vh-65px)] flex-col overflow-x-hidden bg-[#f4f0ea] text-[#171513]">
+      {/* Hidden File & Camera Inputs */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,application/pdf"
+        onChange={handleFileSelected}
+        className="hidden"
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleFileSelected}
+        className="hidden"
+      />
+
       {/* Ambient warm background glow */}
       <div className="pointer-events-none absolute -top-40 left-1/2 -z-10 h-[500px] w-[900px] -translate-x-1/2 rounded-full bg-gradient-to-b from-[#e7ded1]/70 via-[#f5efe6]/40 to-transparent blur-3xl" />
 
@@ -521,18 +624,121 @@ export default function StylistPage() {
         </div>
       )}
 
-      {/* Subtle discreet engine settings button in top corner (replaces bulky header) */}
-      <div className="absolute top-4 right-4 sm:right-8 z-20">
-        <button
-          type="button"
-          onClick={() => setShowKeyModal(true)}
-          className="inline-flex items-center gap-1.5 rounded-full border border-[#ded5c6] bg-white/70 px-3 py-1 text-[11px] font-medium text-neutral-500 hover:text-black hover:bg-white hover:border-black/30 transition shadow-2xs cursor-pointer backdrop-blur-xs"
-          title="Configure AI Engine"
-        >
-          <span className="text-xs">⚙️</span>
-          <span className="hidden sm:inline">Engine</span>
-        </button>
-      </div>
+      {/* ================= LEFT SIDEBAR TOGGLE BUTTON ================= */}
+      <button
+        type="button"
+        onClick={() => setIsSidebarOpen(true)}
+        className="fixed top-24 left-4 sm:left-6 z-30 flex h-10 w-10 items-center justify-center rounded-2xl border border-[#ded5c6] bg-white/90 text-[#171717] shadow-sm backdrop-blur-md transition hover:border-black/40 hover:bg-white hover:scale-105 active:scale-95 cursor-pointer"
+        title="Open Chat History"
+      >
+        <svg className="w-5 h-5 text-neutral-800" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <rect x="3" y="4" width="18" height="16" rx="3" strokeWidth={2} />
+          <line x1="9" y1="4" x2="9" y2="20" strokeWidth={2} />
+        </svg>
+      </button>
+
+      {/* ================= LEFT SIDEBAR DRAWER (MAX 5 SESSIONS) ================= */}
+      {isSidebarOpen && (
+        <>
+          {/* Backdrop overlay */}
+          <div
+            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-xs transition-opacity animate-fade-in"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+
+          {/* Drawer Panel */}
+          <aside className="fixed top-0 left-0 bottom-0 z-50 w-72 sm:w-80 border-r border-[#ded5c6] bg-[#f4f0ea] p-5 shadow-2xl flex flex-col justify-between transition-transform duration-300 animate-slide-in-left">
+            <div>
+              {/* Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-[#e5dfd5]">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-[#171717] text-xs text-white">
+                    ✦
+                  </div>
+                  <span className="font-extrabold text-sm text-[#171717]">Veya Chats</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="h-8 w-8 rounded-full flex items-center justify-center text-neutral-400 hover:text-black hover:bg-black/5 transition cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* New Chat Button */}
+              <div className="pt-4">
+                <button
+                  type="button"
+                  onClick={resetChat}
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#171717] py-2.5 px-4 text-xs font-bold text-white shadow-sm hover:bg-black transition active:scale-95 cursor-pointer"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>New Chat</span>
+                </button>
+              </div>
+
+              {/* Past 5 Chats History List */}
+              <div className="pt-6">
+                <div className="flex items-center justify-between px-1 pb-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">
+                    Recent History (Past 5)
+                  </span>
+                  <span className="text-[10px] text-neutral-400 font-semibold">{chatHistory.length}/5</span>
+                </div>
+
+                {chatHistory.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-[#ded5c6] p-4 text-center text-xs text-neutral-500 mt-2">
+                    No past chats yet. Start styling with Veya!
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 mt-1">
+                    {chatHistory.map((session) => {
+                      const isActive = session.id === currentSessionId && messages.length > 0;
+                      return (
+                        <div
+                          key={session.id}
+                          onClick={() => loadSession(session)}
+                          className={`group flex items-center justify-between rounded-xl px-3 py-2.5 text-xs font-medium transition cursor-pointer ${
+                            isActive
+                              ? "bg-[#171717] text-white shadow-xs"
+                              : "text-[#3a3329] hover:bg-white hover:text-black border border-transparent hover:border-[#ded5c6]"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate pr-2">
+                            <span className={isActive ? "text-white/70" : "text-neutral-400"}>💬</span>
+                            <span className="truncate font-semibold">{session.title}</span>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className={`text-[10px] ${isActive ? "text-white/60" : "text-neutral-400"}`}>
+                              {session.timestamp}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => deleteSession(session.id, e)}
+                              className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-neutral-400 hover:text-red-600 transition"
+                              title="Delete chat"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer in Drawer */}
+            <div className="pt-4 border-t border-[#e5dfd5] text-center text-[10px] text-neutral-400 font-medium">
+              WearWise Veya AI • Max 5 sessions stored locally
+            </div>
+          </aside>
+        </>
+      )}
 
       {/* Wardrobe Reminder Alert if Closet is empty */}
       {wardrobeCount === 0 && (
@@ -569,7 +775,61 @@ export default function StylistPage() {
             </div>
 
             {/* Floating Capsule Input Bar */}
-            <div className="pt-2">
+            <div className="pt-2 relative">
+              {/* Attachment Preview Chip */}
+              {attachedFile && (
+                <div className="mx-auto mb-2 flex items-center gap-2 rounded-2xl border border-[#ded5c6] bg-white px-3 py-1.5 shadow-xs w-fit max-w-sm animate-pop-in">
+                  {attachedFile.type === "image" ? (
+                    <img
+                      src={attachedFile.url}
+                      alt="Attachment preview"
+                      className="h-7 w-7 rounded-lg object-cover border border-[#ded5c6]"
+                    />
+                  ) : (
+                    <span className="text-base">📄</span>
+                  )}
+                  <span className="text-xs font-medium text-neutral-800 truncate max-w-[180px]">
+                    {attachedFile.name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAttachedFile(null)}
+                    className="ml-1 h-5 w-5 rounded-full flex items-center justify-center text-neutral-400 hover:text-red-600 hover:bg-neutral-100 transition cursor-pointer"
+                    title="Remove attachment"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {/* Plus Menu Popover */}
+              {showAttachmentMenu && (
+                <div className="absolute bottom-16 left-1/2 -translate-x-1/2 sm:left-4 sm:translate-x-0 z-30 w-56 rounded-2xl border border-[#ded5c6] bg-white p-1.5 shadow-xl animate-pop-in">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAttachmentMenu(false);
+                      fileInputRef.current?.click();
+                    }}
+                    className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-[#2b261f] hover:bg-[#f4f0ea] hover:text-black transition cursor-pointer text-left"
+                  >
+                    <span className="text-base">📁</span>
+                    <span>Upload photos &amp; files</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAttachmentMenu(false);
+                      cameraInputRef.current?.click();
+                    }}
+                    className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-[#2b261f] hover:bg-[#f4f0ea] hover:text-black transition cursor-pointer text-left"
+                  >
+                    <span className="text-base">📷</span>
+                    <span>Click photo</span>
+                  </button>
+                </div>
+              )}
+
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -577,12 +837,16 @@ export default function StylistPage() {
                 }}
                 className="relative mx-auto flex items-center rounded-full border border-[#ded5c6] bg-white px-3 py-2 shadow-md transition hover:border-[#b8ad9c] focus-within:border-black focus-within:ring-2 focus-within:ring-black/10"
               >
-                {/* Plus / Prompt button */}
+                {/* Plus / Attachment button */}
                 <button
                   type="button"
-                  onClick={() => initialInputRef.current?.focus()}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-black/5 hover:text-black cursor-pointer"
-                  title="Prompt options"
+                  onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition cursor-pointer ${
+                    showAttachmentMenu || attachedFile
+                      ? "bg-black text-white"
+                      : "text-gray-500 hover:bg-black/5 hover:text-black"
+                  }`}
+                  title="Attach photos & files"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 4v16m8-8H4" />
@@ -626,7 +890,7 @@ export default function StylistPage() {
                 {/* Submit / Arrow Button */}
                 <button
                   type="submit"
-                  disabled={!input.trim() || loading}
+                  disabled={(!input.trim() && !attachedFile) || loading}
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#171717] text-white shadow-xs transition hover:bg-black active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 cursor-pointer ml-1"
                   title="Send to Veya"
                 >
@@ -664,33 +928,7 @@ export default function StylistPage() {
       ) : (
         /* ================= STATE B: ACTIVE CHAT CONVERSATION ================= */
         <div className="flex flex-1 flex-col justify-between pb-32">
-          {/* Active Chat Minimal Top Bar */}
-          <div className="sticky top-0 z-20 border-b border-[#e5dfd5]/60 bg-[#f4f0ea]/80 px-4 py-2.5 backdrop-blur-md">
-            <div className="mx-auto flex max-w-3xl items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#171717] text-xs text-white">
-                  ✦
-                </div>
-                <span className="text-xs font-bold text-[#171717]">Veya Chat</span>
-                {engineInfo && (
-                  <span className="text-[10px] text-neutral-500 hidden sm:inline">
-                    • {engineInfo.label}
-                  </span>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={resetChat}
-                className="inline-flex items-center gap-1 rounded-xl border border-[#ded5c6] bg-white px-2.5 py-1 text-xs font-semibold text-[#524a3e] shadow-2xs hover:border-black/30 hover:bg-[#faf7f2] hover:text-black transition cursor-pointer"
-                title="Start a new chat"
-              >
-                <span>+</span>
-                <span>New Chat</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Chat Stream Messages */}
+          {/* Chat Stream Messages (Header completely removed as requested) */}
           <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 space-y-6">
             {messages.map((message, index) => {
               const isUser = message.role === "user";
@@ -699,27 +937,37 @@ export default function StylistPage() {
                   key={message.id}
                   className={`flex flex-col animate-pop-in ${isUser ? "items-end" : "items-start"}`}
                 >
-                  {/* User Bubble */}
+                  {/* User Bubble (Timestamp removed as requested) */}
                   {isUser ? (
                     <div className="max-w-[85%] sm:max-w-[75%] rounded-3xl rounded-tr-none bg-[#171717] px-5 py-3.5 text-xs sm:text-sm leading-relaxed text-white shadow-sm">
+                      {/* Attached Photo / File rendered inside bubble */}
+                      {message.attachment_url && (
+                        <div className="mb-2.5 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                          {message.attachment_type === "image" ? (
+                            <img
+                              src={message.attachment_url}
+                              alt={message.attachment_name || "Attached photo"}
+                              className="max-h-64 w-full object-contain rounded-2xl"
+                            />
+                          ) : (
+                            <div className="flex items-center gap-2 p-3 text-xs text-white">
+                              <span>📄</span>
+                              <span className="truncate">{message.attachment_name || "Attached file"}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <p className="whitespace-pre-wrap font-medium">{message.content}</p>
-                      <p className="mt-1 text-right text-[10px] text-white/50">{message.timestamp}</p>
                     </div>
                   ) : (
                     /* Assistant Bubble & Action Buttons */
                     <div className="w-full max-w-[92%] sm:max-w-[85%] space-y-2">
-                      {/* Badge / Engine Indicator */}
+                      {/* Brand Header (Occasion badge & timestamp removed as requested) */}
                       <div className="flex items-center gap-2 px-1">
                         <div className="flex h-5 w-5 items-center justify-center rounded-md bg-[#171717] text-[10px] text-white">
                           ✦
                         </div>
                         <span className="text-xs font-bold text-[#171717]">Veya</span>
-                        {message.occasion && (
-                          <span className="rounded-full bg-black/5 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-neutral-600 border border-black/10">
-                            {message.occasion}
-                          </span>
-                        )}
-                        <span className="text-[10px] text-neutral-400 ml-auto">{message.timestamp}</span>
                       </div>
 
                       {/* Assistant Text Bubble */}
@@ -813,7 +1061,7 @@ export default function StylistPage() {
                         </div>
                       )}
 
-                      {/* Action Buttons Toolbar below Assistant response (Image 2 style) */}
+                      {/* Action Buttons Toolbar below Assistant response */}
                       <div className="flex items-center gap-1 px-1 pt-1 text-gray-500">
                         {/* Copy Button */}
                         <button
@@ -911,7 +1159,61 @@ export default function StylistPage() {
 
           {/* Bottom Docked Floating Capsule Input Bar */}
           <div className="fixed bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-[#f4f0ea] via-[#f4f0ea]/95 to-transparent pt-6 pb-4 px-4">
-            <div className="mx-auto max-w-2xl space-y-2">
+            <div className="mx-auto max-w-2xl space-y-2 relative">
+              {/* Attachment Preview Chip */}
+              {attachedFile && (
+                <div className="mx-auto mb-2 flex items-center gap-2 rounded-2xl border border-[#ded5c6] bg-white px-3 py-1.5 shadow-xs w-fit max-w-sm animate-pop-in">
+                  {attachedFile.type === "image" ? (
+                    <img
+                      src={attachedFile.url}
+                      alt="Attachment preview"
+                      className="h-7 w-7 rounded-lg object-cover border border-[#ded5c6]"
+                    />
+                  ) : (
+                    <span className="text-base">📄</span>
+                  )}
+                  <span className="text-xs font-medium text-neutral-800 truncate max-w-[180px]">
+                    {attachedFile.name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAttachedFile(null)}
+                    className="ml-1 h-5 w-5 rounded-full flex items-center justify-center text-neutral-400 hover:text-red-600 hover:bg-neutral-100 transition cursor-pointer"
+                    title="Remove attachment"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {/* Plus Menu Popover */}
+              {showAttachmentMenu && (
+                <div className="absolute bottom-16 left-4 z-30 w-56 rounded-2xl border border-[#ded5c6] bg-white p-1.5 shadow-xl animate-pop-in">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAttachmentMenu(false);
+                      fileInputRef.current?.click();
+                    }}
+                    className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-[#2b261f] hover:bg-[#f4f0ea] hover:text-black transition cursor-pointer text-left"
+                  >
+                    <span className="text-base">📁</span>
+                    <span>Upload photos &amp; files</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAttachmentMenu(false);
+                      cameraInputRef.current?.click();
+                    }}
+                    className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-[#2b261f] hover:bg-[#f4f0ea] hover:text-black transition cursor-pointer text-left"
+                  >
+                    <span className="text-base">📷</span>
+                    <span>Click photo</span>
+                  </button>
+                </div>
+              )}
+
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -919,12 +1221,16 @@ export default function StylistPage() {
                 }}
                 className="relative flex items-center rounded-full border border-[#ded5c6] bg-white px-3 py-2 shadow-lg transition hover:border-[#b8ad9c] focus-within:border-black focus-within:ring-2 focus-within:ring-black/10"
               >
-                {/* Plus / Clear Button */}
+                {/* Plus / Attachment Button */}
                 <button
                   type="button"
-                  onClick={resetChat}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-black/5 hover:text-black cursor-pointer"
-                  title="New styling conversation"
+                  onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition cursor-pointer ${
+                    showAttachmentMenu || attachedFile
+                      ? "bg-black text-white"
+                      : "text-gray-500 hover:bg-black/5 hover:text-black"
+                  }`}
+                  title="Attach photos & files"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 4v16m8-8H4" />
@@ -967,7 +1273,7 @@ export default function StylistPage() {
                 {/* Submit / Arrow Button */}
                 <button
                   type="submit"
-                  disabled={!input.trim() || loading}
+                  disabled={(!input.trim() && !attachedFile) || loading}
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#171717] text-white shadow-xs transition hover:bg-black active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 cursor-pointer ml-1"
                   title="Send to Veya"
                 >
@@ -982,137 +1288,11 @@ export default function StylistPage() {
                 </button>
               </form>
 
-              {/* Disclaimer matching Image 2 */}
+              {/* Disclaimer */}
               <p className="text-center text-[10px] text-neutral-500 font-medium">
                 Veya can make mistakes. Verify important style and sizing details.
               </p>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= API KEY CONNECTION MODAL ================= */}
-      {showKeyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-fade-in">
-          <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl animate-pop-in">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <div className="flex items-center gap-2.5">
-                <span className="text-xl">🔑</span>
-                <div>
-                  <h2 className="text-base font-extrabold text-gray-950">Connect Veya AI</h2>
-                  <p className="text-[11px] text-gray-500">Enable real-time dynamic AI dialogue</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowKeyModal(false)}
-                className="rounded-full h-8 w-8 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Provider selection tabs */}
-            <div className="mt-4 flex rounded-xl bg-gray-100 p-1">
-              <button
-                type="button"
-                onClick={() => setSelectedProvider("gemini")}
-                className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition cursor-pointer ${
-                  selectedProvider === "gemini" ? "bg-white text-gray-950 shadow-xs" : "text-gray-500 hover:text-gray-950"
-                }`}
-              >
-                ✦ Google Gemini (Free)
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedProvider("openai")}
-                className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition cursor-pointer ${
-                  selectedProvider === "openai" ? "bg-white text-gray-950 shadow-xs" : "text-gray-500 hover:text-gray-950"
-                }`}
-              >
-                ✦ OpenAI (ChatGPT)
-              </button>
-            </div>
-
-            {/* Instructions */}
-            {selectedProvider === "gemini" ? (
-              <div className="mt-4 rounded-2xl bg-sky-50 border border-sky-200 p-3.5 text-xs text-sky-950 space-y-2">
-                <p className="font-bold flex items-center gap-1.5">
-                  <span>✨</span>
-                  <span>How to get your FREE Gemini API Key (10s):</span>
-                </p>
-                <ol className="list-decimal list-inside text-[11px] text-sky-900 space-y-1 pl-1">
-                  <li>
-                    Open{" "}
-                    <a
-                      href="https://aistudio.google.com/app/apikey"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline font-bold text-sky-700 hover:text-sky-900"
-                    >
-                      Google AI Studio (Click here)
-                    </a>
-                  </li>
-                  <li>Sign in with your Google account & click <strong>Create API Key</strong></li>
-                  <li>
-                    Copy your key (starts with <code className="bg-sky-100 px-1 py-0.5 rounded text-[10px] font-mono">AIzaSy...</code>) and paste it below:
-                  </li>
-                </ol>
-              </div>
-            ) : (
-              <div className="mt-4 rounded-2xl bg-emerald-50 border border-emerald-200 p-3.5 text-xs text-emerald-950 space-y-1.5">
-                <p className="font-bold flex items-center gap-1.5">
-                  <span>⚡</span>
-                  <span>OpenAI API Key:</span>
-                </p>
-                <p className="text-[11px] text-emerald-900">
-                  Paste your OpenAI secret key from{" "}
-                  <a
-                    href="https://platform.openai.com/api-keys"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="underline font-bold"
-                  >
-                    platform.openai.com
-                  </a>{" "}
-                  (starts with <code className="bg-emerald-100 px-1 py-0.5 rounded text-[10px] font-mono">sk-...</code>).
-                </p>
-              </div>
-            )}
-
-            {/* Key input form */}
-            <form onSubmit={handleSaveApiKey} className="mt-4 space-y-3">
-              <div>
-                <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
-                  {selectedProvider === "gemini" ? "Gemini API Key" : "OpenAI API Key"}
-                </label>
-                <input
-                  type="password"
-                  value={apiKeyInput}
-                  onChange={(e) => setApiKeyInput(e.target.value)}
-                  placeholder={selectedProvider === "gemini" ? "AIzaSy..." : "sk-..."}
-                  className="h-11 w-full rounded-xl border border-gray-200 bg-[#fbfbf9] px-3.5 text-xs font-mono text-gray-900 outline-none transition focus:border-black focus:bg-white"
-                  autoFocus
-                />
-              </div>
-
-              <div className="flex items-center gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowKeyModal(false)}
-                  className="flex-1 rounded-xl border border-gray-200 py-2.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={!apiKeyInput.trim() || savingKey}
-                  className="flex-1 rounded-xl bg-[#171717] py-2.5 text-xs font-bold text-white hover:bg-black transition disabled:opacity-50 cursor-pointer shadow-sm"
-                >
-                  {savingKey ? "Connecting..." : "Save & Connect"}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
