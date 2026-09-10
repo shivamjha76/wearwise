@@ -173,6 +173,10 @@ export default function StylistPage() {
     type: "image" | "file";
   } | null>(null);
 
+  // Streaming Typewriter State
+  const [isTypingResponse, setIsTypingResponse] = useState(false);
+  const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const initialInputRef = useRef<HTMLInputElement>(null);
@@ -187,7 +191,16 @@ export default function StylistPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, loading]);
+  }, [messages, loading, isTypingResponse]);
+
+  // Clean up typing timer on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimerRef.current) {
+        clearInterval(typingTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -272,6 +285,11 @@ export default function StylistPage() {
   };
 
   const loadSession = (session: ChatSession) => {
+    if (typingTimerRef.current) {
+      clearInterval(typingTimerRef.current);
+      typingTimerRef.current = null;
+    }
+    setIsTypingResponse(false);
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
@@ -300,6 +318,11 @@ export default function StylistPage() {
   };
 
   const resetChat = () => {
+    if (typingTimerRef.current) {
+      clearInterval(typingTimerRef.current);
+      typingTimerRef.current = null;
+    }
+    setIsTypingResponse(false);
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
@@ -476,20 +499,59 @@ export default function StylistPage() {
       }
 
       const data = await res.json();
+      const fullReply = data.reply || "Here is my tailored recommendation for your look.";
 
-      const assistantMessage: ChatMessage = {
+      const assistantMessageTemplate: ChatMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
-        content: data.reply || "Here is my tailored recommendation for your look.",
+        content: "",
         recommended_items: data.recommended_items || [],
         occasion: data.occasion || null,
         engine: data.engine || null,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
 
-      const finalMessages = [...updatedMessages, assistantMessage];
-      setMessages(finalMessages);
-      saveSessionToHistory(finalMessages);
+      setLoading(false);
+      setIsTypingResponse(true);
+
+      // Mount initial empty assistant bubble
+      setMessages([...updatedMessages, assistantMessageTemplate]);
+
+      let charIdx = 0;
+      const charsPerTick = fullReply.length > 500 ? 4 : fullReply.length > 250 ? 3 : 2;
+      const tickIntervalMs = 18;
+
+      if (typingTimerRef.current) {
+        clearInterval(typingTimerRef.current);
+      }
+
+      typingTimerRef.current = setInterval(() => {
+        charIdx += charsPerTick;
+        if (charIdx >= fullReply.length) {
+          if (typingTimerRef.current) clearInterval(typingTimerRef.current);
+          typingTimerRef.current = null;
+          setIsTypingResponse(false);
+
+          const finalAssistantMessage: ChatMessage = {
+            ...assistantMessageTemplate,
+            content: fullReply,
+          };
+          const finalMessages = [...updatedMessages, finalAssistantMessage];
+          setMessages(finalMessages);
+          saveSessionToHistory(finalMessages);
+        } else {
+          const currentSlice = fullReply.slice(0, charIdx);
+          setMessages((prev) => {
+            if (prev.length === 0) return prev;
+            const last = prev[prev.length - 1];
+            if (last.id !== assistantMessageTemplate.id) return prev;
+            return [
+              ...prev.slice(0, -1),
+              { ...last, content: currentSlice },
+            ];
+          });
+        }
+      }, tickIntervalMs);
     } catch (err: unknown) {
       console.error(err);
       const errorMessage: ChatMessage = {
@@ -906,7 +968,7 @@ export default function StylistPage() {
                   {/* Submit / Arrow Button */}
                   <button
                     type="submit"
-                    disabled={(!input.trim() && !attachedFile) || loading}
+                    disabled={(!input.trim() && !attachedFile) || loading || isTypingResponse}
                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#171717] text-white shadow-xs transition hover:bg-black active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 cursor-pointer ml-1"
                     title="Send to Veya"
                   >
@@ -989,10 +1051,15 @@ export default function StylistPage() {
                         {/* Assistant Text Bubble */}
                         <div className="rounded-3xl rounded-tl-none border border-[#ded5c6] bg-white px-5 py-4 text-xs sm:text-sm leading-relaxed text-gray-900 shadow-2xs">
                           <FormattedMessage content={message.content} isUser={false} />
+                          {isTypingResponse && index === messages.length - 1 && (
+                            <span className="inline-block w-1.5 h-3.5 bg-[#171717] ml-1 align-middle animate-pulse rounded-xs" />
+                          )}
                         </div>
 
-                        {/* Embedded Recommended Garments (if any) */}
-                        {message.recommended_items && message.recommended_items.length > 0 && (
+                        {/* Embedded Recommended Garments (if any, revealed when typing finishes) */}
+                        {(!isTypingResponse || index < messages.length - 1) &&
+                          message.recommended_items &&
+                          message.recommended_items.length > 0 && (
                           <div className="rounded-3xl border border-[#ded5c6] bg-white p-4 shadow-2xs space-y-3">
                             <div className="flex items-center justify-between border-b border-[#eceef0] pb-2.5">
                               <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">
@@ -1077,77 +1144,79 @@ export default function StylistPage() {
                           </div>
                         )}
 
-                        {/* Action Buttons Toolbar below Assistant response */}
-                        <div className="flex items-center gap-1 px-1 pt-1 text-gray-500">
-                          {/* Copy Button */}
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(message.content, message.id)}
-                            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium hover:bg-black/5 hover:text-black transition cursor-pointer"
-                            title="Copy response"
-                          >
-                            {copiedId === message.id ? (
-                              <>
-                                <span className="text-emerald-600">✓</span>
-                                <span className="text-emerald-600 font-semibold text-[11px]">Copied</span>
-                              </>
-                            ) : (
-                              <>
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                                  />
-                                </svg>
-                                <span className="text-[11px]">Copy</span>
-                              </>
-                            )}
-                          </button>
+                        {/* Action Buttons Toolbar below Assistant response (revealed when typing finishes) */}
+                        {(!isTypingResponse || index < messages.length - 1) && (
+                          <div className="flex items-center gap-1 px-1 pt-1 text-gray-500">
+                            {/* Copy Button */}
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(message.content, message.id)}
+                              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium hover:bg-black/5 hover:text-black transition cursor-pointer"
+                              title="Copy response"
+                            >
+                              {copiedId === message.id ? (
+                                <>
+                                  <span className="text-emerald-600">✓</span>
+                                  <span className="text-emerald-600 font-semibold text-[11px]">Copied</span>
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                                    />
+                                  </svg>
+                                  <span className="text-[11px]">Copy</span>
+                                </>
+                              )}
+                            </button>
 
-                          {/* Read Aloud / Listen Button */}
-                          <button
-                            type="button"
-                            onClick={() => speakMessage(message.id, message.content)}
-                            className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium transition cursor-pointer ${
-                              speakingId === message.id
-                                ? "bg-black text-white"
-                                : "hover:bg-black/5 hover:text-black"
-                            }`}
-                            title={speakingId === message.id ? "Stop speaking" : "Listen to response"}
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-                              />
-                            </svg>
-                            <span className="text-[11px]">
-                              {speakingId === message.id ? "Stop" : "Listen"}
-                            </span>
-                          </button>
+                            {/* Read Aloud / Listen Button */}
+                            <button
+                              type="button"
+                              onClick={() => speakMessage(message.id, message.content)}
+                              className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium transition cursor-pointer ${
+                                speakingId === message.id
+                                  ? "bg-black text-white"
+                                  : "hover:bg-black/5 hover:text-black"
+                              }`}
+                              title={speakingId === message.id ? "Stop speaking" : "Listen to response"}
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                                />
+                              </svg>
+                              <span className="text-[11px]">
+                                {speakingId === message.id ? "Stop" : "Listen"}
+                              </span>
+                            </button>
 
-                          {/* Retry / Regenerate Button */}
-                          <button
-                            type="button"
-                            onClick={() => handleRegenerate(index)}
-                            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium hover:bg-black/5 hover:text-black transition cursor-pointer"
-                            title="Regenerate this response"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                              />
-                            </svg>
-                            <span className="text-[11px]">Retry</span>
-                          </button>
-                        </div>
+                            {/* Retry / Regenerate Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleRegenerate(index)}
+                              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium hover:bg-black/5 hover:text-black transition cursor-pointer"
+                              title="Regenerate this response"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                />
+                              </svg>
+                              <span className="text-[11px]">Retry</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1289,7 +1358,7 @@ export default function StylistPage() {
                   {/* Submit / Arrow Button */}
                   <button
                     type="submit"
-                    disabled={(!input.trim() && !attachedFile) || loading}
+                    disabled={(!input.trim() && !attachedFile) || loading || isTypingResponse}
                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#171717] text-white shadow-xs transition hover:bg-black active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 cursor-pointer ml-1"
                     title="Send to Veya"
                   >
