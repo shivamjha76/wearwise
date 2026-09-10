@@ -323,6 +323,7 @@ def next_purchase(
     user_id: int,
     store: str | None = None,
     max_price: int | None = None,
+    q: str | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -372,8 +373,8 @@ def next_purchase(
             )
         recommendation["products"] = store_products
 
-    # Build complete curated catalog with wardrobe match indicators
-    all_catalog = get_all_catalog_products(store_filter=store, max_price=max_price)
+    # Build complete curated catalog with wardrobe match indicators and live web search
+    all_catalog = get_all_catalog_products(store_filter=store, max_price=max_price, search_query=q)
     
     missing_targets = {
         (r.get("category", "").lower(), r.get("color", "").lower()): r.get("new_outfit_combinations", 0)

@@ -139,18 +139,29 @@ export default function ShopPage() {
     });
   };
 
-  const fetchShopData = async () => {
+  const [searchingLive, setSearchingLive] = useState(false);
+
+  const fetchShopData = async (queryParam?: string) => {
     const user = getStoredUser();
     if (!user) {
       router.push("/login");
       return;
     }
 
-    setLoading(true);
+    if (queryParam) {
+      setSearchingLive(true);
+    } else {
+      setLoading(true);
+    }
     setError(false);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/wardrobe/${user.id}/next-purchase`, {
+      const url = new URL(`${API_BASE_URL}/wardrobe/${user.id}/next-purchase`);
+      if (queryParam && queryParam.trim().length >= 3) {
+        url.searchParams.set("q", queryParam.trim());
+      }
+
+      const response = await fetch(url.toString(), {
         headers: getAuthHeaders(),
       });
       if (!response.ok) throw new Error("Failed to fetch shop recommendations");
@@ -162,6 +173,7 @@ export default function ShopPage() {
       setError(true);
     } finally {
       setLoading(false);
+      setSearchingLive(false);
     }
   };
 
@@ -458,25 +470,43 @@ export default function ShopPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
               
               {/* Search Bar */}
-              <div className="relative flex-1 max-w-lg">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (searchQuery.trim().length >= 3) {
+                    fetchShopData(searchQuery.trim());
+                  }
+                }}
+                className="relative flex-1 max-w-lg"
+              >
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search for shirts, jeans, sneakers..."
-                  className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 py-2.5 text-xs text-neutral-900 placeholder:text-neutral-400 focus:border-black focus:outline-hidden shadow-2xs transition"
+                  placeholder="Search shirts, jeans, sneakers... (Press Enter for live web)"
+                  className="w-full rounded-xl border border-gray-200 bg-white pl-10 pr-24 py-2.5 text-xs text-neutral-900 placeholder:text-neutral-400 focus:border-black focus:outline-hidden shadow-2xs transition"
                 />
-                {searchQuery && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="p-1 text-neutral-400 hover:text-black cursor-pointer"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                   <button
-                    type="button"
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-black cursor-pointer"
+                    type="submit"
+                    disabled={searchingLive || searchQuery.trim().length < 3}
+                    className="rounded-lg bg-neutral-950 px-2 py-1 text-[10px] font-bold text-white transition hover:bg-black disabled:opacity-40 cursor-pointer shadow-xs"
+                    title="Search live on Myntra, Flipkart, Ajio"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    {searchingLive ? "Searching..." : "Live"}
                   </button>
-                )}
-              </div>
+                </div>
+              </form>
 
               {/* Mobile Filter Button & Desktop Sort Dropdown */}
               <div className="flex items-center gap-2">
@@ -505,6 +535,14 @@ export default function ShopPage() {
                 </div>
               </div>
             </div>
+
+            {/* Live Search Status Banner */}
+            {searchingLive && (
+              <div className="flex items-center gap-2 mb-4 rounded-xl bg-[#fffaf0] border border-[#f5e3ba] px-4 py-2 text-xs text-amber-900 animate-pulse">
+                <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
+                <span className="font-semibold">Searching live deals across Myntra, Flipkart, and Ajio...</span>
+              </div>
+            )}
 
             {/* Active Filters Pill Row */}
             {(selectedCategories.length > 0 || selectedColor || selectedBrand || maxPrice < 10000 || searchQuery) && (
@@ -561,7 +599,7 @@ export default function ShopPage() {
                 <p className="text-sm font-bold text-red-600">Failed to load shop items</p>
                 <button
                   type="button"
-                  onClick={fetchShopData}
+                  onClick={() => fetchShopData()}
                   className="mt-3 rounded-xl bg-black px-4 py-2 text-xs font-bold text-white cursor-pointer"
                 >
                   Try Again

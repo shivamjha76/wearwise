@@ -6,10 +6,22 @@ Aggregates and recommends real fashion pieces across Indian & global fashion pla
 - Ajio
 - Meesho
 - H&M, Uniqlo, Zara, Levi's, Nike, Fossil
+Includes live Google / SerpApi web shopping search integration with resilient caching.
 """
 
 from typing import List, Dict, Any, Optional
+import os
+import time
+import re
+import json
 import urllib.parse
+import urllib.request
+from pathlib import Path
+from dotenv import load_dotenv
+
+APP_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(APP_DIR / ".env")
+load_dotenv()
 
 # Real base search URLs for direct in-store landing
 STORE_URL_BUILDERS = {
@@ -22,6 +34,10 @@ STORE_URL_BUILDERS = {
     "Zara": lambda q: f"https://www.zara.com/in/en/search?searchTerm={urllib.parse.quote(q)}",
     "Nike": lambda q: f"https://www.nike.com/in/w?q={urllib.parse.quote(q)}",
 }
+
+# In-memory cache for live search results with 12 hour TTL to save credits
+LIVE_SEARCH_CACHE: Dict[str, Dict[str, Any]] = {}
+CACHE_TTL_SECONDS = 12 * 3600
 
 # Rich curated database of high-rated, essential wardrobe items
 CURATED_STORE_PRODUCTS: List[Dict[str, Any]] = [
@@ -348,7 +364,7 @@ CURATED_STORE_PRODUCTS: List[Dict[str, Any]] = [
         "discount_percent": 50,
         "rating": 4.6,
         "reviews_count": 3120,
-        "store": "Myntra",
+        "store": "Hush Puppies",
         "store_url": "https://www.myntra.com/formal-shoes/hush-puppies/men-black-genuine-leather-derby-shoes/1301928/buy",
         "image": "https://images.unsplash.com/photo-1614252369475-531eba835eb1?w=600&auto=format&fit=crop&q=80",
         "brand": "Hush Puppies",
@@ -415,6 +431,141 @@ def generate_live_store_link(product_name: str, store_name: str) -> str:
     return builder(product_name)
 
 
+def fetch_live_web_products(query: str, limit: int = 6) -> List[Dict[str, Any]]:
+    """
+    Searches live web for Indian store products (Myntra, Flipkart, Ajio)
+    via SerpApi Google Engine with caching and fallback.
+    """
+    if not query or not query.strip():
+        return []
+
+    cache_key = query.lower().strip()
+    now = time.time()
+
+    # 1. Check in-memory cache
+    if cache_key in LIVE_SEARCH_CACHE:
+        entry = LIVE_SEARCH_CACHE[cache_key]
+        if now - entry.get("timestamp", 0) < CACHE_TTL_SECONDS:
+            return entry.get("results", [])[:limit]
+
+    api_key = os.getenv("SERPAPI_API_KEY")
+    if not api_key or len(api_key) < 20:
+        return []
+
+    try:
+        search_query = f"{query} men (site:myntra.com OR site:flipkart.com OR site:ajio.com)"
+        params = urllib.parse.urlencode({
+            "engine": "google",
+            "q": search_query,
+            "num": 6,
+            "api_key": api_key
+        })
+        url = f"https://serpapi.com/search.json?{params}"
+        req = urllib.request.Request(url, headers={"User-Agent": "WearWise/1.0"})
+        with urllib.request.urlopen(req, timeout=18) as response:
+            data = json.loads(response.read().decode("utf-8"))
+
+        organic_results = data.get("organic_results", [])
+        parsed_items = []
+
+        for idx, r in enumerate(organic_results):
+            raw_title = r.get("title", "")
+            # Clean title
+            clean_title = re.sub(r'^(Buy\s+|Shop\s+)', '', raw_title, flags=re.I)
+            clean_title = clean_title.split(" - ")[0].split(" | ")[0].strip()
+            if not clean_title or len(clean_title) < 5:
+                continue
+
+            link = r.get("link", "")
+            snippet = r.get("snippet", "")
+
+            # Detect store
+            if "myntra.com" in link:
+                store = "Myntra"
+            elif "flipkart.com" in link:
+                store = "Flipkart"
+            elif "ajio.com" in link:
+                store = "Ajio"
+            else:
+                store = "Online Store"
+
+            # Extract price in INR
+            price = 1299
+            price_match = re.search(r'₹\s*([0-9,]+)', snippet)
+            if price_match:
+                try:
+                    price = int(price_match.group(1).replace(",", ""))
+                except Exception:
+                    price = 1299
+
+            # Detect rating
+            rating_val = r.get("rich_snippet", {}).get("top", {}).get("detected_extensions", {}).get("rating")
+            rating = float(rating_val) if rating_val else 4.3
+
+            # Detect group and category
+            cat_guess = "shirt"
+            group_guess = "Topwear"
+            lower_title = clean_title.lower()
+            if any(w in lower_title for w in ["jeans", "pant", "trouser", "chino"]):
+                cat_guess = "pants"
+                group_guess = "Bottomwear"
+            elif any(w in lower_title for w in ["shoe", "sneaker", "boot", "loafer"]):
+                cat_guess = "sneakers"
+                group_guess = "Footwear"
+            elif any(w in lower_title for w in ["jacket", "hoodie", "blazer", "coat"]):
+                cat_guess = "jacket"
+                group_guess = "Outerwear"
+            elif any(w in lower_title for w in ["watch", "belt", "sunglass"]):
+                cat_guess = "watch"
+                group_guess = "Accessories"
+
+            # Detect color
+            color_guess = "black"
+            for c in ["white", "black", "blue", "grey", "olive", "beige", "maroon", "brown", "green"]:
+                if c in lower_title:
+                    color_guess = c
+                    break
+
+            # Find matching aesthetic high-res image
+            image_url = None
+            for c_item in CURATED_STORE_PRODUCTS:
+                if c_item.get("group") == group_guess and _normalize_col(c_item.get("color")) == _normalize_col(color_guess):
+                    image_url = c_item.get("image")
+                    break
+            if not image_url:
+                image_url = "/shop/products/hm_shirt.png"
+
+            item_id = f"live-{store.lower()[:3]}-{idx}-{abs(hash(clean_title)) % 100000}"
+            parsed_items.append({
+                "id": item_id,
+                "name": clean_title,
+                "category": cat_guess,
+                "group": group_guess,
+                "color": color_guess,
+                "price": price,
+                "original_price": int(price * 1.4),
+                "discount_percent": 30,
+                "rating": rating,
+                "reviews_count": 1200,
+                "store": store,
+                "store_url": link,
+                "image": image_url,
+                "brand": store,
+                "badge": "Live Web Pick",
+                "reason": f"Found live on {store} matching your search."
+            })
+
+        # Cache results
+        LIVE_SEARCH_CACHE[cache_key] = {
+            "timestamp": now,
+            "results": parsed_items
+        }
+        return parsed_items[:limit]
+    except Exception as e:
+        print(f"SerpApi live search error: {e}")
+        return []
+
+
 def get_all_catalog_products(
     store_filter: Optional[str] = None,
     group_filter: Optional[str] = None,
@@ -423,10 +574,18 @@ def get_all_catalog_products(
     max_price: Optional[int] = None,
     search_query: Optional[str] = None
 ) -> List[Dict[str, Any]]:
-    """Returns all catalog items with full filtering support."""
+    """Returns all catalog items, augmenting with live web items when query is present."""
     results = []
 
-    for item in CURATED_STORE_PRODUCTS:
+    # If search query is provided, also fetch live web items
+    live_items = []
+    if search_query and len(search_query.strip()) >= 3:
+        live_items = fetch_live_web_products(search_query.strip(), limit=6)
+
+    # Combine live items + curated catalog
+    pool = live_items + CURATED_STORE_PRODUCTS
+
+    for item in pool:
         # Store filter
         if store_filter and store_filter.lower() != "all":
             if item.get("store", "").lower() != store_filter.lower():
@@ -453,8 +612,8 @@ def get_all_catalog_products(
         if max_price and item.get("price", 0) > max_price:
             continue
 
-        # Search query
-        if search_query:
+        # Search query matching (if live items didn't already match)
+        if search_query and item not in live_items:
             sq = search_query.lower().strip()
             text = f"{item.get('name', '')} {item.get('brand', '')} {item.get('category', '')} {item.get('color', '')} {item.get('group', '')}".lower()
             if sq not in text:
