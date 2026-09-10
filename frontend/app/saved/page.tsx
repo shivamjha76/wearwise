@@ -44,6 +44,65 @@ const COLOR_MAP: Record<string, string> = {
   maroon: "#881337",
 };
 
+const SAVED_TAGLINES = [
+  "Your signature style, archived.",
+  "Curated looks, ready anytime.",
+  "Personal formulas, saved forever.",
+  "Favorite outfits, preserved daily.",
+];
+
+function AnimatedSavedTagline() {
+  const [index, setIndex] = useState(0);
+  const [subIndex, setSubIndex] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+
+  useEffect(() => {
+    if (isPaused) {
+      const pauseTimer = setTimeout(() => {
+        setIsPaused(false);
+        setIsDeleting(true);
+      }, 2200);
+      return () => clearTimeout(pauseTimer);
+    }
+
+    if (isDeleting) {
+      if (subIndex === 0) {
+        setIsDeleting(false);
+        setIndex((prev) => (prev + 1) % SAVED_TAGLINES.length);
+        return;
+      }
+      const deleteTimer = setTimeout(() => {
+        setSubIndex((prev) => prev - 1);
+      }, 35);
+      return () => clearTimeout(deleteTimer);
+    }
+
+    if (subIndex === SAVED_TAGLINES[index].length) {
+      setIsPaused(true);
+      return;
+    }
+
+    const typeTimer = setTimeout(() => {
+      setSubIndex((prev) => prev + 1);
+    }, 75);
+
+    return () => clearTimeout(typeTimer);
+  }, [subIndex, index, isDeleting, isPaused]);
+
+  return (
+    <div className="mt-1.5 flex items-center min-h-[26px]">
+      <p className="text-xs sm:text-sm font-medium text-gray-500 tracking-tight flex items-center gap-1.5">
+        <span className="text-neutral-400 text-xs">✨</span>
+        <span className="text-neutral-900 font-semibold tracking-tight">
+          {SAVED_TAGLINES[index].substring(0, subIndex)}
+        </span>
+        <span className="inline-block w-[2px] h-3.5 sm:h-4 bg-black align-middle animate-pulse" />
+      </p>
+    </div>
+  );
+}
+
 export default function SavedOutfitsPage() {
   const router = useRouter();
   const [outfits, setOutfits] = useState<SavedOutfit[]>([]);
@@ -176,16 +235,10 @@ export default function SavedOutfitsPage() {
         <div className="mb-8 border-b border-[#e2e4e7] pb-8">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#dedad0] bg-white/90 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#45546a] shadow-2xs backdrop-blur-md">
-                <span className="flex h-2 w-2 rounded-full bg-amber-500" />
-                <span>Personal Lookbook</span>
-              </div>
-              <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">
+              <h1 className="text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">
                 Curated Saved Looks
               </h1>
-              <p className="mt-1 max-w-xl text-xs sm:text-sm text-gray-600">
-                Your archive of saved 3-piece coordinate formulas ready to wear on demand.
-              </p>
+              <AnimatedSavedTagline />
             </div>
 
             <div className="flex items-center gap-2.5">
@@ -287,11 +340,6 @@ export default function SavedOutfitsPage() {
                       <span className="rounded-full bg-black/5 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-800 border border-black/10">
                         {outfit.occasion}
                       </span>
-                      {outfit.style_vibe && (
-                        <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[10px] font-semibold capitalize text-blue-700 border border-blue-100">
-                          {outfit.style_vibe}
-                        </span>
-                      )}
                     </div>
 
                     {outfit.score && (
@@ -307,14 +355,6 @@ export default function SavedOutfitsPage() {
                     <PieceThumbnail label="Bottom" item={outfit.bottom} fallbackEmoji="👖" />
                     <PieceThumbnail label="Footwear" item={outfit.shoes} fallbackEmoji="👟" />
                   </div>
-
-                  {/* Stylist Rationale */}
-                  {outfit.explanation && (
-                    <div className="mt-4 rounded-2xl bg-[#fffaf0] border border-[#f5e3ba] p-3 text-xs text-amber-950 leading-relaxed">
-                      <span className="font-bold block mb-0.5 text-amber-900">Stylist Rationale:</span>
-                      {outfit.explanation}
-                    </div>
-                  )}
                 </div>
 
                 {/* Footer Row */}

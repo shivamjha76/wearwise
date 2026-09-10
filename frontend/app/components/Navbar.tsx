@@ -98,7 +98,7 @@ export default function Navbar() {
       badge: "AI",
     },
     {
-      name: "Saved Looks",
+      name: "Lookbook",
       href: "/saved",
       icon: Bookmark,
       desc: "Your curated outfit lookbook",
